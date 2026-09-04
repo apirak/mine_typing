@@ -5,11 +5,12 @@ import { Play, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
 
 import { Battlefield } from "@/components/game/battlefield";
 import { activeEnemies } from "@/lib/game/matching";
-import { useGameStore } from "@/lib/game/store";
+import { LEVEL_ONE_WORDS, useGameStore } from "@/lib/game/store";
 
 const ROWS = [["Q","W","E","R","T","Y","U","I","O","P"],["A","S","D","F","G","H","J","K","L"],["Z","X","C","V","B","N","M"]];
 
 export default function Home() {
+  const phase = useGameStore((state) => state.phase);
   const enemies = useGameStore((state) => state.enemies);
   const sequence = useGameStore((state) => state.sequence);
   const hits = useGameStore((state) => state.hits);
@@ -28,8 +29,9 @@ export default function Home() {
   const gameRef = useRef<HTMLDivElement>(null);
   const [shaking, setShaking] = useState(false);
   const remaining = activeEnemies(enemies).length;
+  const defeatedCount = enemies.length - remaining;
   const accuracy = hits + misses === 0 ? 100 : Math.round((hits / (hits + misses)) * 100);
-  const progress = ((enemies.length - remaining) / enemies.length) * 100;
+  const progress = (defeatedCount / LEVEL_ONE_WORDS.length) * 100;
 
   const reset = useCallback(() => {
     resetStore();
@@ -51,7 +53,11 @@ export default function Home() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setPaused(!useGameStore.getState().paused);
+        // Pausing only interrupts a live run (spec #2: typing/pauses apply
+        // while playing).
+        if (useGameStore.getState().phase === "playing") {
+          setPaused(!useGameStore.getState().paused);
+        }
         return;
       }
       typeKey(event.key);
@@ -76,7 +82,13 @@ export default function Home() {
         <div className="keyboard" aria-label="On-screen keyboard">{ROWS.map((row,rowIndex)=><div className={`key-row row-${rowIndex}`} key={rowIndex}>{row.map((key)=><button key={key} onClick={()=>typeKey(key)} className={`${key === "F" || key === "J" ? "training-key" : ""} ${lastKey === key ? "pressed" : ""}`}><span>{key}</span>{(key === "F" || key === "J") && <i/>}</button>)}</div>)}</div>
         <p className="hint"><kbd>F</kbd> Left index finger <span>•</span> <kbd>J</kbd> Right index finger <span>•</span> Press <kbd>Esc</kbd> to pause</p>
       </footer>
-      {(paused || remaining === 0) && <div className="overlay" role="dialog" aria-modal="true"><div className="pause-card"><span className="card-kicker">{remaining === 0 ? "NICE WORK" : "GAME PAUSED"}</span><h1>{remaining === 0 ? "Wave cleared!" : "Take a breath"}</h1><p>{remaining === 0 ? `${accuracy}% accuracy · ${hits} correct keys` : "Your progress is safe. Continue whenever you are ready."}</p>{remaining > 0 && <button className="primary-button" onClick={()=>{setPaused(false);gameRef.current?.focus();}}><Play size={18} fill="currentColor"/> Continue</button>}<button className="secondary-button" onClick={reset}><RotateCcw size={18}/> Restart level</button></div></div>}
+      {(paused || phase !== "playing") && <div className="overlay" role="dialog" aria-modal="true"><div className="pause-card">
+        <span className="card-kicker">{phase === "game-over" ? "GAME OVER" : phase === "level-complete" ? "NICE WORK" : "GAME PAUSED"}</span>
+        <h1>{phase === "game-over" ? "A creature got through" : phase === "level-complete" ? "Wave cleared!" : "Take a breath"}</h1>
+        <p>{phase === "game-over" ? "It reached the Danger Line. Restart the level to try again." : phase === "level-complete" ? `${accuracy}% accuracy · ${hits} correct keys` : "Your progress is safe. Continue whenever you are ready."}</p>
+        {paused && phase === "playing" && <button className="primary-button" onClick={()=>{setPaused(false);gameRef.current?.focus();}}><Play size={18} fill="currentColor"/> Continue</button>}
+        <button className="secondary-button" onClick={reset}><RotateCcw size={18}/> Restart level</button>
+      </div></div>}
     </section>
   </main>;
 }

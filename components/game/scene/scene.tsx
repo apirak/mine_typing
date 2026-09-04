@@ -1,19 +1,20 @@
 "use client";
 
 // The fixed Side View scene (ADR 0001): sunset sky and lighting, voxel
-// ground, drifting clouds, the Player at the far left, the four Zombies at
-// their fixed lanes, and the Danger Line. Game rules live in the store —
-// these components only read and animate.
+// ground, drifting clouds, the Player at the far left, the walking Zombies,
+// and the Danger Line. The scene owns the frame clock (GameClock) but no
+// rules — game state flows from the store, positions from the motion world.
 
 import { useGameStore } from "@/lib/game/store";
 
 import { BattlefieldGround, DangerLine, DriftingClouds, SunsetSky } from "./environment";
+import { GameClock } from "./game-clock";
 import { VoxelPlayer } from "./voxel-player";
 import { VoxelZombie } from "./voxel-zombie";
 
 export function Scene() {
-  // The scene re-renders on every key; each VoxelZombie is keyed by enemy
-  // id so its local animation state survives pulse/defeat updates.
+  // The scene re-renders on spawns and keys; each VoxelZombie is keyed by
+  // enemy id so its local animation state survives pulse/defeat updates.
   const enemies = useGameStore((state) => state.enemies);
 
   return (
@@ -29,8 +30,9 @@ export function Scene() {
       <DangerLine />
       <VoxelPlayer />
       {enemies.map((enemy) => (
-        <VoxelZombie key={enemy.id} id={enemy.id} lane={enemy.lane} />
+        <VoxelZombie key={enemy.id} id={enemy.id} />
       ))}
+      <GameClock />
     </>
   );
 }

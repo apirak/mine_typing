@@ -5,14 +5,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Group, InstancedMesh, MeshLambertMaterial } from "three";
 import { Color, Object3D } from "three";
 
-import { laneToWorldX } from "@/lib/game/layout";
+import { SPAWN_X, enemyX } from "@/lib/game/movement";
 import { seededRandom } from "@/lib/game/random";
-import { useGameStore } from "@/lib/game/store";
+import { gameMotion, useGameStore } from "@/lib/game/store";
 
 import { EnemyWord } from "./enemy-word";
 import { useReducedMotion } from "../use-reduced-motion";
 
 const FLASH = new Color("#ff5148");
+const GAIT_SPEED = 9;
 
 type Debris = {
   velocity: [number, number, number];
@@ -23,23 +24,29 @@ type Debris = {
 const random = seededRandom(0x9e3779b9);
 
 // One original voxel zombie: chunky body parts in articulated groups so
-// idle sway, hit flinch, and voxel-scatter defeat can animate them.
-export function VoxelZombie({ id, lane }: { id: number; lane: number }) {
+// idle sway, hit flinch, walking gait, and voxel-scatter defeat can animate
+// them. Its world x comes from the motion world each frame — never from
+// React state.
+export function VoxelZombie({ id }: { id: number }) {
   const enemy = useGameStore((state) => state.enemies.find((candidate) => candidate.id === id));
   const sequence = useGameStore((state) => state.sequence);
   const reducedMotion = useReducedMotion();
 
+  const rootRef = useRef<Group>(null);
   const bodyRef = useRef<Group>(null);
+  const leftLegRef = useRef<Group>(null);
+  const rightLegRef = useRef<Group>(null);
   const skinRef = useRef<MeshLambertMaterial>(null);
   const clothRef = useRef<MeshLambertMaterial>(null);
   const debrisRef = useRef<InstancedMesh>(null);
   const [bursting, setBursting] = useState(false);
   const flinchT = useRef(1);
+  const walkPhase = useRef(id * 1.31);
+  const deathX = useRef(SPAWN_X);
   const burstT = useRef(0);
   const lastPulse = useRef(enemy?.pulse ?? 0);
   const wasDefeated = useRef(enemy?.defeated ?? false);
-  const phase = useMemo(() => lane * 0.11, [lane]);
-  const worldX = laneToWorldX(lane);
+  const phase = useMemo(() => id * 0.73, [id]);
 
   const debris = useMemo<Debris[]>(
     () =>
@@ -74,6 +81,7 @@ export function VoxelZombie({ id, lane }: { id: number; lane: number }) {
     if (!enemy.defeated && wasDefeated.current) {
       wasDefeated.current = false;
       setBursting(false);
+      deathX.current = enemyX(gameMotion.world, id) ?? SPAWN_X;
     }
     if (enemy.pulse !== lastPulse.current) {
       lastPulse.current = enemy.pulse;
@@ -81,13 +89,16 @@ export function VoxelZombie({ id, lane }: { id: number; lane: number }) {
     }
     if (enemy.defeated && !wasDefeated.current) {
       wasDefeated.current = true;
+      // The motion world keeps the entry frozen at the death spot.
+      deathX.current = enemyX(gameMotion.world, id) ?? deathX.current;
       burstT.current = 0;
       setBursting(true);
     }
-  }, [enemy]);
+  }, [enemy, id]);
 
   useFrame(({ clock }, delta) => {
     const body = bodyRef.current;
+    const root = rootRef.current;
     if (bursting) {
       burstT.current += delta;
       const mesh = debrisRef.current;
@@ -97,7 +108,7 @@ export function VoxelZombie({ id, lane }: { id: number; lane: number }) {
         debris.forEach((piece, index) => {
           const time = Math.min(elapsed, 1.7);
           dummy.position.set(
-            worldX + piece.velocity[0] * time,
+            deathX.current + piece.velocity[0] * time,
             1.3 + piece.velocity[1] * time - 4.9 * time * time,
             piece.velocity[2] * time,
           );
@@ -117,16 +128,29 @@ export function VoxelZombie({ id, lane }: { id: number; lane: number }) {
       return;
     }
 
-    if (!body || !enemy || enemy.defeated) return;
-    const t = clock.getElapsedTime();
+    if (!body || !root || !enemy || enemy.defeated) return;
 
-    // Idle sway + bob, toned down (or off) under reduced motion.
+    // Live position from the motion world; the zombie walks right-to-left.
+    root.position.x = enemyX(gameMotion.world, id) ?? SPAWN_X;
+
+    const t = clock.getElapsedTime();
+    const flinching = flinchT.current < 1;
+    // The gait advances only while actually walking: it freezes mid-stride
+    // during the hit-stop and stays static under reduced motion.
+    const striding = !reducedMotion && !flinching;
+    if (striding) walkPhase.current += delta * GAIT_SPEED;
+    const swing = striding ? Math.sin(walkPhase.current) * 0.55 : 0;
+    if (leftLegRef.current) leftLegRef.current.rotation.x = swing;
+    if (rightLegRef.current) rightLegRef.current.rotation.x = -swing;
+
+    // Idle sway, plus a walk bob and a slight forward lean toward -x.
     const swayStrength = reducedMotion ? 0 : 0.05;
     body.rotation.y = Math.sin(t * 1.2 + phase) * swayStrength;
-    body.position.y = reducedMotion ? 0 : Math.abs(Math.sin(t * 2.1 + phase)) * 0.04;
+    body.position.y = Math.abs(Math.sin(walkPhase.current)) * (reducedMotion ? 0 : 0.045);
+    const lean = reducedMotion || flinching ? 0 : 0.07;
 
     // Hit flinch: lean back toward +x and flash red, decaying fast.
-    if (flinchT.current < 1) {
+    if (flinching) {
       flinchT.current = Math.min(1, flinchT.current + delta / 0.3);
       const p = flinchT.current;
       body.rotation.z = reducedMotion ? 0 : -0.3 * Math.sin(Math.PI * p);
@@ -134,7 +158,7 @@ export function VoxelZombie({ id, lane }: { id: number; lane: number }) {
       skinRef.current?.emissive.copy(FLASH).multiplyScalar(flash);
       clothRef.current?.emissive.copy(FLASH).multiplyScalar(flash * 0.6);
     } else {
-      body.rotation.z = 0;
+      body.rotation.z = lean;
       skinRef.current?.emissive.setScalar(0);
       clothRef.current?.emissive.setScalar(0);
     }
@@ -156,17 +180,21 @@ export function VoxelZombie({ id, lane }: { id: number; lane: number }) {
   }
 
   return (
-    <group position={[worldX, 0, 0]}>
+    <group ref={rootRef} position={[SPAWN_X, 0, 0]}>
       <group ref={bodyRef}>
-        {/* legs */}
-        <mesh position={[-0.18, 0.4, 0]}>
-          <boxGeometry args={[0.3, 0.8, 0.3]} />
-          <meshLambertMaterial color="#33502f" />
-        </mesh>
-        <mesh position={[0.18, 0.4, 0]}>
-          <boxGeometry args={[0.3, 0.8, 0.3]} />
-          <meshLambertMaterial color="#33502f" />
-        </mesh>
+        {/* legs, hip-pivoted so they can swing while walking */}
+        <group ref={leftLegRef} position={[-0.18, 0.8, 0]}>
+          <mesh position={[0, -0.4, 0]}>
+            <boxGeometry args={[0.3, 0.8, 0.3]} />
+            <meshLambertMaterial color="#33502f" />
+          </mesh>
+        </group>
+        <group ref={rightLegRef} position={[0.18, 0.8, 0]}>
+          <mesh position={[0, -0.4, 0]}>
+            <boxGeometry args={[0.3, 0.8, 0.3]} />
+            <meshLambertMaterial color="#33502f" />
+          </mesh>
+        </group>
         {/* torso */}
         <mesh position={[0, 1.28, 0]}>
           <boxGeometry args={[0.85, 0.95, 0.45]} />
