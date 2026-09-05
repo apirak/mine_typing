@@ -24,6 +24,23 @@ async function renderGameplayPage() {
   return renderToStaticMarkup(React.createElement(Home));
 }
 
+async function renderOutcomeCard(props) {
+  const { OutcomeCard } = await vite.ssrLoadModule(
+    "/components/game/outcome-card.tsx",
+  );
+  return renderToStaticMarkup(
+    React.createElement(OutcomeCard, {
+      paused: false,
+      accuracy: 83,
+      hits: 5,
+      best: null,
+      onContinue: () => {},
+      onRestart: () => {},
+      ...props,
+    }),
+  );
+}
+
 test("gameplay page server-renders the 3D canvas, HUD, and keyboard", async () => {
   const html = await renderGameplayPage();
 
@@ -53,4 +70,33 @@ test("a WebGL-less canvas still renders a fallback message in the scene area", a
   const html = await renderGameplayPage();
   assert.match(html, /class="battlefield"/);
   assert.match(html, /class="scene-canvas"/);
+});
+
+test("the level-complete card shows the run and the Level's best accuracy and combo", async () => {
+  const html = await renderOutcomeCard({
+    phase: "level-complete",
+    best: { accuracy: 96, combo: 18 },
+  });
+
+  assert.match(html, /Level cleared!/);
+  assert.match(html, /83% accuracy · 5 correct keys/);
+  assert.match(html, /Best: 96% accuracy · ×18 combo/);
+});
+
+test("the level-complete card hides the best line until the Level has stored bests", async () => {
+  const html = await renderOutcomeCard({ phase: "level-complete" });
+
+  assert.match(html, /Level cleared!/);
+  assert.doesNotMatch(html, /Best:/);
+});
+
+test("the game-over card stays its own state, without a best line", async () => {
+  const html = await renderOutcomeCard({
+    phase: "game-over",
+    best: { accuracy: 96, combo: 18 },
+  });
+
+  assert.match(html, /GAME OVER/);
+  assert.match(html, /A creature got through/);
+  assert.doesNotMatch(html, /Best:/);
 });
