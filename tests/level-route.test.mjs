@@ -10,7 +10,12 @@ const vite = await createServer({
   appType: "custom",
   configFile: false,
   root,
-  resolve: { alias: { "@": root } },
+  resolve: {
+    alias: [
+      { find: /^next\/navigation$/, replacement: `${root}/tests/fake-navigation.ts` },
+      { find: "@", replacement: root },
+    ],
+  },
   server: { middlewareMode: true },
 });
 

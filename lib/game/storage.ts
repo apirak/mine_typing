@@ -17,9 +17,13 @@ export type StorageRecord = {
   schemaVersion: number;
 };
 
-/** The player's tunable settings (spec #2; the editing screen lands in #6). */
+/** The player's tunable settings (spec #2; the editing screen is #6). */
 export type GameSettings = {
   sound: boolean;
+  /** Background music on/off; the loop itself lands with the audio work. */
+  music: boolean;
+  /** Master volume, 0–100. */
+  volume: number;
   /** An explicit reduced-motion choice; null defers to the OS preference. */
   reducedMotion: boolean | null;
   showVirtualKeyboard: boolean;
@@ -40,6 +44,8 @@ export type LevelResultData = {
   incorrectKeys: number;
   /** Longest streak reached during the run. */
   bestCombo: number;
+  /** Play time of the run in seconds (pauses excluded). */
+  elapsedSeconds: number;
 };
 
 export type LevelResult = LevelResultData & StorageRecord;
@@ -55,6 +61,8 @@ export interface GameStorage {
   saveProfile(profile: PlayerProfile): Promise<void>;
   saveLevelResult(result: LevelResult): Promise<void>;
   loadLevelResults(): Promise<LevelResult[]>;
+  /** Forget every saved run; settings survive (ticket #6's Reset progress). */
+  clearLevelResults(): Promise<void>;
 }
 
 /** The run's accuracy as the HUD reports it: rounded 0–100, 100 when nothing typed. */

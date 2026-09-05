@@ -7,10 +7,11 @@
 // load effect (re)seeds from that same data on every route entry.
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Volume2, VolumeX, X } from "lucide-react";
 
 import { Battlefield } from "@/components/game/battlefield";
-import { OutcomeCard } from "@/components/game/outcome-card";
+import { PauseCard } from "@/components/game/pause-card";
 import { typedKeyFromEvent } from "@/lib/game/keys";
 import { activeEnemies } from "@/lib/game/matching";
 import { KEY_FINGERS, type Level } from "@/lib/game/levels";
@@ -24,6 +25,7 @@ const ROWS = [
 ];
 
 export function GameplayScreen({ level }: { level: Level }) {
+  const router = useRouter();
   const storeLevelId = useGameStore((state) => state.level.id);
   const phase = useGameStore((state) => state.phase);
   const enemies = useGameStore((state) => state.enemies);
@@ -34,7 +36,6 @@ export function GameplayScreen({ level }: { level: Level }) {
   const paused = useGameStore((state) => state.paused);
   const sound = useGameStore((state) => state.sound);
   const showVirtualKeyboard = useGameStore((state) => state.showVirtualKeyboard);
-  const levelBest = useGameStore((state) => state.levelBest);
   const lastKey = useGameStore((state) => state.lastKey);
   const shakeTick = useGameStore((state) => state.shakeTick);
   const typeKey = useGameStore((state) => state.typeKey);
@@ -65,6 +66,17 @@ export function GameplayScreen({ level }: { level: Level }) {
   useEffect(() => {
     useGameStore.getState().loadLevel(level.id);
   }, [level.id]);
+
+  // The Result route owns the run's outcome (ticket #6): a short beat so
+  // the final keypress reads, then the gameplay screen hands off.
+  useEffect(() => {
+    if (phase !== "level-complete" && phase !== "game-over") return;
+    const timer = window.setTimeout(
+      () => router.push(`/level/${level.id}/result`),
+      450,
+    );
+    return () => window.clearTimeout(timer);
+  }, [phase, level.id, router]);
 
   // Restore persisted settings and this Level's bests (ticket #5). The
   // server render shows the defaults; the client corrects after load.
@@ -124,13 +136,8 @@ export function GameplayScreen({ level }: { level: Level }) {
         })}</div>)}</div>}
         <p className="hint">{level.trainedKeys.map((key, index) => <Fragment key={key}><kbd>{key}</kbd> {KEY_FINGERS[key]} {index < level.trainedKeys.length - 1 && <span>•</span>} </Fragment>)}<span>•</span> Press <kbd>Esc</kbd> to pause</p>
       </footer>
-      {(paused || phase !== "playing") && <div className="overlay" role="dialog" aria-modal="true">
-        <OutcomeCard
-          phase={phase}
-          paused={paused}
-          accuracy={accuracy}
-          hits={hits}
-          best={levelBest}
+      {paused && <div className="overlay" role="dialog" aria-modal="true">
+        <PauseCard
           onContinue={()=>{setPaused(false);gameRef.current?.focus();}}
           onRestart={reset}
         />
