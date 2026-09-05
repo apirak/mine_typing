@@ -1,7 +1,8 @@
 // Pure progression rules (plan_a §11, spec #2): the star rating a finished
-// run earns, its typing speed, and which Levels a saved history unlocks.
-// No React, no DOM, no storage — inputs arrive as plain values, so the
-// rules stay assertable from node:test and Worlds 2–4 reuse them as data.
+// run earns, its typing speed, the display line for a star rating, and
+// which Levels a saved history unlocks. No React, no DOM, no storage —
+// inputs arrive as plain values, so the rules stay assertable from
+// node:test.
 
 import { WORLD_ONE } from "./levels";
 
@@ -62,4 +63,10 @@ export function nextLevelId(levelId: string): string | null {
   const index = WORLD_ONE.findIndex((level) => level.id === levelId);
   if (index < 0 || index + 1 >= WORLD_ONE.length) return null;
   return WORLD_ONE[index + 1].id;
+}
+
+/** A three-glyph display of a star rating, e.g. "★★☆"; out of range reads empty. */
+export function starLine(stars: number): string {
+  const filled = Math.min(3, Math.max(0, Math.round(stars)));
+  return "★".repeat(filled) + "☆".repeat(3 - filled);
 }

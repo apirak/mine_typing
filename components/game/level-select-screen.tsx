@@ -8,7 +8,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { LevelSelect, type LevelProgress } from "./level-select";
+import { LevelSelect, completedIdsFromProgress, type LevelProgress } from "./level-select";
 import { completedLevelIds, isLevelUnlocked, starsFor } from "@/lib/game/progression";
 import type { Level } from "@/lib/game/levels";
 import { bestOfResults } from "@/lib/game/storage";
@@ -55,9 +55,7 @@ export function LevelSelectScreen({ levels }: { levels: readonly Level[] }) {
     })();
   }, [levels]);
 
-  const completed = new Set(
-    Object.keys(progress).filter((id) => progress[id].best !== null),
-  );
+  const completed = completedIdsFromProgress(progress);
   const playable = levels.filter((level) => isLevelUnlocked(level.id, completed));
   const selectedId = playable.some((level) => level.id === selectedOverride)
     ? selectedOverride

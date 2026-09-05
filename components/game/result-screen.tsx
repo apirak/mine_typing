@@ -45,26 +45,22 @@ export function ResultScreen({ level }: { level: Level }) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      // A focused control activates itself; the shortcuts stay free for
+      // bare keypresses only, or Enter would fire NEXT twice.
+      if (event.target instanceof HTMLElement && event.target.closest("button, input, a, select, textarea")) return;
       if (event.key === "Enter" && phase === "level-complete" && next) {
         router.push(`/level/${next}`);
       } else if (event.key === "Escape") {
         select();
+      } else {
+        const key = typedKeyFromEvent(event);
+        if (key === "R") retry();
+        if (key === "L") select();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [router, phase, next]);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const key = typedKeyFromEvent(event);
-      if (key === "R") retry();
-      if (key === "L") select();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, level.id]);
+  });
 
   return <main className="game-shell">
     <section className="menu-frame" aria-label={`Result: ${level.name}`}>

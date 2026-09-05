@@ -5,7 +5,7 @@
 import { RotateCcw, Map, ChevronRight } from "lucide-react";
 
 import type { Level } from "@/lib/game/levels";
-import { cpm } from "@/lib/game/progression";
+import { cpm, starLine } from "@/lib/game/progression";
 
 export type RunStats = {
   accuracy: number;
@@ -39,13 +39,11 @@ export function ResultCard({
   onSelect,
   onNext,
 }: ResultCardProps) {
-  const starLine = "★".repeat(stars) + "☆".repeat(3 - stars);
-
   return <div className="pause-card result-card">
     <span className="card-kicker">{defeated ? "GAME OVER" : "LEVEL COMPLETE"}</span>
     <h1>{defeated ? "A creature got through" : level.name}</h1>
     <p className="result-stars" aria-label={`${stars} of 3 stars`}>
-      {defeated ? "☆☆☆" : starLine}
+      {defeated ? "☆☆☆" : starLine(stars)}
     </p>
     <p>
       {defeated

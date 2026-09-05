@@ -13,6 +13,12 @@ export type LevelProgress = {
   stars: number | null;
 };
 
+/** The Level ids a progress map says are completed (they carry a best). */
+export const completedIdsFromProgress = (
+  progress: Record<string, LevelProgress>,
+): Set<string> =>
+  new Set(Object.keys(progress).filter((id) => progress[id].best !== null));
+
 export type LevelSelectProps = {
   levels: readonly Level[];
   /** Saved facts keyed by Level id; a missing entry means never played. */
@@ -32,9 +38,7 @@ const starLine = (stars: number | null): string =>
   "★".repeat(stars ?? 0) + "☆".repeat(3 - (stars ?? 0));
 
 export function LevelSelect({ levels, progress, selectedId, onPlay }: LevelSelectProps) {
-  const completed = new Set(
-    Object.keys(progress).filter((id) => progress[id].best !== null),
-  );
+  const completed = completedIdsFromProgress(progress);
 
   return <main className="game-shell">
     <section className="menu-frame" aria-label="Level Select">
