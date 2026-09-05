@@ -80,6 +80,9 @@ const freshRunState = (level: Level) => ({
 
 const firstLevel = WORLD_ONE[0];
 
+/** How long the virtual keyboard's pressed key stays down before releasing. */
+const KEY_FLASH_MS = 180;
+
 export const gameMotion: { world: MotionWorld } = { world: motionFor(firstLevel) };
 
 type GameStore = {
@@ -133,6 +136,10 @@ type GameStore = {
 };
 
 export const useGameStore = create<GameStore>((set, get) => {
+  // Pending release of the pressed-key flash, cleared when the next key
+  // application restarts the flash.
+  let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+
   // The settings slice as the storage interface sees it.
   const settingsOf = (state: GameStore): GameSettings => ({
     sound: state.sound,
@@ -260,6 +267,13 @@ export const useGameStore = create<GameStore>((set, get) => {
                 : `${event.defeatedIds.length} creature cleared — new target`
               : `${event.hitIds.length} target${event.hitIds.length > 1 ? "s" : ""} matched`,
       });
+
+      // The virtual key's pressed look is a flash, not a latch: release
+      // it shortly after every application or it stays stuck down until
+      // the next keypress. A pending release after a run reset is a
+      // harmless no-op (freshRunState already cleared lastKey).
+      clearTimeout(releaseTimer);
+      releaseTimer = setTimeout(() => set({ lastKey: "" }), KEY_FLASH_MS);
 
       // The level-complete phase is the save point (ticket #5).
       if (phase === "level-complete" && state.phase === "playing") {

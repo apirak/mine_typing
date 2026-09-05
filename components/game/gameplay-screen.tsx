@@ -12,7 +12,7 @@ import { Volume2, VolumeX, X } from "lucide-react";
 
 import { Battlefield } from "@/components/game/battlefield";
 import { PauseCard } from "@/components/game/pause-card";
-import { typedKeyFromEvent } from "@/lib/game/keys";
+import { isForeignLetterEvent, typedKeyFromEvent } from "@/lib/game/keys";
 import { activeEnemies } from "@/lib/game/matching";
 import { KEY_FINGERS, type Level } from "@/lib/game/levels";
 import { accuracyPercent } from "@/lib/game/storage";
@@ -52,6 +52,9 @@ export function GameplayScreen({ level }: { level: Level }) {
 
   const gameRef = useRef<HTMLDivElement>(null);
   const [shaking, setShaking] = useState(false);
+  // Sticky once a non-English letter press arrives; an English keypress
+  // clears it, so the note tracks the live input source.
+  const [foreignInput, setForeignInput] = useState(false);
   const remaining = activeEnemies(enemies).length;
   const defeatedCount = enemies.length - remaining;
   const accuracy = accuracyPercent(hits, misses);
@@ -106,11 +109,16 @@ export function GameplayScreen({ level }: { level: Level }) {
         }
         return;
       }
-      // Non-Latin input sources (Thai layouts, dead keys) type layout
-      // characters; resolve the pressed key's position so touch typing
-      // keeps working whatever the layout is.
+      // The game reads what the player actually typed, never the pressed
+      // key's position: a non-English input source raises a "switch to
+      // English" note instead of being reinterpreted (issue #9).
       const key = typedKeyFromEvent(event);
-      if (key) typeKey(key);
+      if (key) {
+        setForeignInput(false);
+        typeKey(key);
+      } else if (isForeignLetterEvent(event)) {
+        setForeignInput(true);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -129,6 +137,7 @@ export function GameplayScreen({ level }: { level: Level }) {
       <Battlefield level={level} />
       <footer className="typing-deck">
         <div className="feedback-row"><div><span className="status-light"/> {feedback}</div><span>{sequence ? <>Sequence <strong>{sequence}</strong></> : "Waiting for a new target"}</span></div>
+        {foreignInput && <p className="hint foreign-hint" role="status">Your keyboard isn't typing English — switch your input source to <kbd>EN</kbd> <span lang="th">(คีย์บอร์ดไม่ใช่ภาษาอังกฤษ — สลับภาษาเป็น EN)</span></p>}
         {showVirtualKeyboard && <div className="keyboard" aria-label="On-screen keyboard">{ROWS.map((row,rowIndex)=><div className={`key-row row-${rowIndex}`} key={rowIndex}>{row.map((key)=>{
           const trained = level.trainedKeys.includes(key);
           const classes = [trained && "training-key", lastKey === key && "pressed"].filter(Boolean).join(" ");
