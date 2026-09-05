@@ -3,14 +3,16 @@
 // Single source of truth for gameplay state, consumed by both the DOM UI
 // and the 3D scene. The store holds no matching or movement rules of its
 // own — keys go through the pure module in ./matching, time steps through
-// ./movement. Per-frame positions live OUTSIDE React state in the
-// gameMotion box below: no DOM view consumes them, so the 60 fps clock
+// ./movement, and everything that distinguishes Levels comes from the
+// plain data in ./levels. Per-frame positions live OUTSIDE React state in
+// the gameMotion box below: no DOM view consumes them, so the 60 fps clock
 // never re-renders the HUD. The store only receives movement's discrete
 // events (spawns, Danger Line breach, near-line band changes).
 
 import { create } from "zustand";
 
 import { applyKey, activeEnemies, type EnemyState } from "./matching";
+import { getLevel, WORLD_ONE, type Level } from "./levels";
 import {
   createMotion,
   levelComplete,
@@ -22,23 +24,52 @@ import {
 
 export type BattlefieldEnemy = EnemyState & { pulse: number };
 
-/** Level 1's Word queue in spawn order (Level data arrives with #2 step 2). */
-export const LEVEL_ONE_WORDS: readonly string[] = ["F", "FJ", "J", "JF"];
-
 export type GamePhase = "playing" | "level-complete" | "game-over";
 
-const motion = (): MotionWorld => createMotion(LEVEL_ONE_WORDS);
-const spawnedEnemies = (world: MotionWorld): BattlefieldEnemy[] =>
-  world.walking.map((enemy) => ({
-    id: enemy.id,
-    word: LEVEL_ONE_WORDS[enemy.id - 1],
-    defeated: false,
-    pulse: 0,
-  }));
+/** A Level's motion world: its own speed and spawn interval from the data. */
+const motionFor = (level: Level): MotionWorld =>
+  createMotion(level.words, {
+    walkSpeed: level.walkSpeed,
+    spawnInterval: level.spawnInterval,
+  });
 
-export const gameMotion: { world: MotionWorld } = { world: motion() };
+const spawnedEnemies = (level: Level, world: MotionWorld): BattlefieldEnemy[] =>
+  world.walking.map((enemy) => freshEnemy(level, enemy.id));
+
+const freshEnemy = (level: Level, id: number): BattlefieldEnemy => ({
+  id,
+  word: level.words[id - 1],
+  defeated: false,
+  pulse: 0,
+});
+
+/** The status line a fresh run of a Level starts with. */
+export const readyFeedback = (level: Level): string =>
+  `Type ${level.trainedKeys.join(" or ")} to attack`;
+
+/** Store fields a fresh run of a Level starts with. */
+const freshRunState = (level: Level) => ({
+  phase: "playing" as GamePhase,
+  enemies: spawnedEnemies(level, gameMotion.world),
+  sequence: "",
+  hits: 0,
+  misses: 0,
+  combo: 0,
+  paused: false,
+  dangerNear: false,
+  feedback: readyFeedback(level),
+  lastKey: "",
+  shakeTick: 0,
+  attackTick: 0,
+});
+
+const firstLevel = WORLD_ONE[0];
+
+export const gameMotion: { world: MotionWorld } = { world: motionFor(firstLevel) };
 
 type GameStore = {
+  /** The Level currently loaded; its data seeds the run. */
+  level: Level;
   phase: GamePhase;
   enemies: BattlefieldEnemy[];
   sequence: string;
@@ -57,27 +88,18 @@ type GameStore = {
   typeKey: (rawKey: string) => void;
   /** Advance the motion world one frame; called by the scene's clock. */
   tick: (dt: number) => void;
+  /** Start a fresh run of the Level with the given route id. */
+  loadLevel: (id: string) => void;
+  /** Restart the loaded Level from its first spawn. */
   reset: () => void;
   setPaused: (paused: boolean) => void;
   toggleSound: () => void;
 };
 
-const READY_FEEDBACK = "Type F or J to attack";
-
 export const useGameStore = create<GameStore>((set, get) => ({
-  phase: "playing",
-  enemies: spawnedEnemies(gameMotion.world),
-  sequence: "",
-  hits: 0,
-  misses: 0,
-  combo: 0,
-  paused: false,
+  level: firstLevel,
+  ...freshRunState(firstLevel),
   sound: true,
-  dangerNear: false,
-  feedback: READY_FEEDBACK,
-  lastKey: "",
-  shakeTick: 0,
-  attackTick: 0,
 
   typeKey: (rawKey) => {
     const state = get();
@@ -125,7 +147,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           ? `${rawKey.toUpperCase()} missed — start again`
           : event.kind === "defeat"
             ? phase === "level-complete"
-              ? "Wave cleared!"
+              ? "Level cleared!"
               : `${event.defeatedIds.length} creature cleared — new target`
             : `${event.hitIds.length} target${event.hitIds.length > 1 ? "s" : ""} matched`,
     });
@@ -147,12 +169,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({
         enemies: [
           ...state.enemies,
-          ...step.spawnedIds.map((id) => ({
-            id,
-            word: LEVEL_ONE_WORDS[id - 1],
-            defeated: false,
-            pulse: 0,
-          })),
+          ...step.spawnedIds.map((id) => freshEnemy(state.level, id)),
         ],
       });
     }
@@ -160,20 +177,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (dangerNear !== state.dangerNear) set({ dangerNear });
   },
 
+  loadLevel: (id) => {
+    const level = getLevel(id);
+    if (!level) return;
+    gameMotion.world = motionFor(level);
+    set({ level, ...freshRunState(level) });
+  },
+
   reset: () => {
-    gameMotion.world = motion();
-    set({
-      phase: "playing",
-      enemies: spawnedEnemies(gameMotion.world),
-      sequence: "",
-      hits: 0,
-      misses: 0,
-      combo: 0,
-      paused: false,
-      dangerNear: false,
-      feedback: READY_FEEDBACK,
-      lastKey: "",
-    });
+    const level = get().level;
+    gameMotion.world = motionFor(level);
+    set(freshRunState(level));
   },
 
   setPaused: (paused) => set({ paused }),

@@ -4,7 +4,8 @@ import { Canvas } from "@react-three/fiber";
 import { Suspense } from "react";
 
 import { matchedLetters } from "@/lib/game/matching";
-import { LEVEL_ONE_WORDS, useGameStore } from "@/lib/game/store";
+import type { Level } from "@/lib/game/levels";
+import { useGameStore } from "@/lib/game/store";
 
 import { Scene } from "./scene/scene";
 import { useAutoPause } from "./use-auto-pause";
@@ -22,33 +23,36 @@ function WebGLFallback() {
   );
 }
 
-function WordMirror() {
+function WordMirror({ level }: { level: Level }) {
   const enemies = useGameStore((state) => state.enemies);
   const sequence = useGameStore((state) => state.sequence);
   const phase = useGameStore((state) => state.phase);
   const dangerNear = useGameStore((state) => state.dangerNear);
 
   // Counts cover the whole Level queue, not just spawned Enemies, so the
-  // mission stays readable (and server-renderable) between spawns.
+  // mission stays readable (and server-renderable) between spawns. The
+  // Words come from the Level data prop, so the mirror is correct for the
+  // route even before the store has loaded the Level client-side.
   const defeatedCount = enemies.filter((enemy) => enemy.defeated).length;
-  const remaining = LEVEL_ONE_WORDS.length - defeatedCount;
+  const remaining = level.words.length - defeatedCount;
   const byId = new Map(enemies.map((enemy) => [enemy.id, enemy]));
 
   let summary: string;
   if (phase === "game-over") {
     summary = "Game over. An enemy reached the Danger Line.";
   } else if (remaining === 0) {
-    summary = "Wave complete. Every enemy is defeated.";
+    summary = "Level complete. Every enemy is defeated.";
   } else {
     summary =
       `${remaining} ${remaining === 1 ? "enemy" : "enemies"} remaining. ` +
-      LEVEL_ONE_WORDS.map((word, index) => {
-        const enemy = byId.get(index + 1);
-        if (enemy?.defeated) return null;
-        // Queued Enemies read as 0 matched until they spawn.
-        const matched = enemy ? matchedLetters(word, sequence) : 0;
-        return `Word ${word.split("").join(" ")}: ${matched} of ${word.length} letters matched.`;
-      })
+      level.words
+        .map((word, index) => {
+          const enemy = byId.get(index + 1);
+          if (enemy?.defeated) return null;
+          // Queued Enemies read as 0 matched until they spawn.
+          const matched = enemy ? matchedLetters(word, sequence) : 0;
+          return `Word ${word.split("").join(" ")}: ${matched} of ${word.length} letter${word.length === 1 ? "" : "s"} matched.`;
+        })
         .filter(Boolean)
         .join(" ");
     if (phase === "playing" && dangerNear) {
@@ -65,13 +69,13 @@ function WordMirror() {
 
 // The battlefield area of the gameplay screen: a true 3D voxel scene
 // (ADR 0001/0002) with the DOM mission card and the offscreen word mirror
-// layered on top. HUD and keyboard stay in the page component.
-export function Battlefield() {
+// layered on top. HUD and keyboard stay in the screen component.
+export function Battlefield({ level }: { level: Level }) {
   const enemies = useGameStore((state) => state.enemies);
   useAutoPause();
 
   const defeatedCount = enemies.filter((enemy) => enemy.defeated).length;
-  const remaining = LEVEL_ONE_WORDS.length - defeatedCount;
+  const remaining = level.words.length - defeatedCount;
 
   return (
     <div className="battlefield">
@@ -93,12 +97,12 @@ export function Battlefield() {
           <small>YOUR MISSION</small>
           <strong>
             {remaining === 0
-              ? "Wave complete!"
+              ? "Level complete!"
               : `Clear ${remaining} creature${remaining > 1 ? "s" : ""}`}
           </strong>
         </div>
       </div>
-      <WordMirror />
+      <WordMirror level={level} />
     </div>
   );
 }
