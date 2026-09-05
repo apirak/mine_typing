@@ -137,7 +137,7 @@ export function GameplayScreen({ level }: { level: Level }) {
       <Battlefield level={level} />
       <footer className="typing-deck">
         <div className="feedback-row"><div><span className="status-light"/> {feedback}</div><span>{sequence ? <>Sequence <strong>{sequence}</strong></> : "Waiting for a new target"}</span></div>
-        {foreignInput && <p className="hint foreign-hint" role="status">Your keyboard isn't typing English — switch your input source to <kbd>EN</kbd> (คีย์บอร์ดไม่ใช่ภาษาอังกฤษ — สลับภาษาเป็น EN)</p>}
+        {foreignInput && <p className="hint foreign-hint" role="status">Your keyboard isn't typing English — switch your input source to <kbd>EN</kbd> <span lang="th">(คีย์บอร์ดไม่ใช่ภาษาอังกฤษ — สลับภาษาเป็น EN)</span></p>}
         {showVirtualKeyboard && <div className="keyboard" aria-label="On-screen keyboard">{ROWS.map((row,rowIndex)=><div className={`key-row row-${rowIndex}`} key={rowIndex}>{row.map((key)=>{
           const trained = level.trainedKeys.includes(key);
           const classes = [trained && "training-key", lastKey === key && "pressed"].filter(Boolean).join(" ");
