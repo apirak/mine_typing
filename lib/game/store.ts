@@ -139,12 +139,17 @@ export const useGameStore = create<GameStore>((set, get) => {
       .catch(() => {});
   };
 
-  /** Bests for the Level, from storage; applied only if the Level is still loaded. */
+  /** Bests for the Level, from storage; applied only if the Level is still
+   * loaded. Never rejects — best-effort reads leave the current bests alone. */
   const refreshBests = async (levelId: string) => {
-    const results = await gameStorage().loadLevelResults();
-    const best = bestOfResults(results, levelId);
-    if (get().level.id !== levelId) return;
-    set({ levelBest: best });
+    try {
+      const results = await gameStorage().loadLevelResults();
+      const best = bestOfResults(results, levelId);
+      if (get().level.id !== levelId) return;
+      set({ levelBest: best });
+    } catch {
+      // Storage read failed; the run continues with the bests it has.
+    }
   };
 
   /** Write the current settings through the interface (fire-and-forget). */
@@ -303,14 +308,19 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     hydrate: async () => {
-      const profile = await gameStorage().loadProfile();
-      if (profile) {
-        const { settings } = profile;
-        set({
-          sound: settings.sound,
-          reducedMotion: settings.reducedMotion,
-          showVirtualKeyboard: settings.showVirtualKeyboard,
-        });
+      // Best-effort restore: a storage failure keeps the defaults.
+      try {
+        const profile = await gameStorage().loadProfile();
+        if (profile) {
+          const { settings } = profile;
+          set({
+            sound: settings.sound,
+            reducedMotion: settings.reducedMotion,
+            showVirtualKeyboard: settings.showVirtualKeyboard,
+          });
+        }
+      } catch {
+        // Storage read failed; defaults stay.
       }
       await refreshBests(get().level.id);
     },

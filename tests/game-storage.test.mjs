@@ -137,3 +137,41 @@ test("malformed stored JSON reads as absent instead of crashing", async () => {
   assert.equal(await storage.loadProfile(), null);
   assert.deepEqual(await storage.loadLevelResults(), []);
 });
+
+test("a current-version profile with a malformed shape is ignored, not crashed on", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  backing.setItem("mine_typing:profile", JSON.stringify({
+    id: "half-baked",
+    createdAt: "2026-09-05T10:00:00.000Z",
+    updatedAt: "2026-09-05T10:00:00.000Z",
+    schemaVersion: 1,
+  }));
+  assert.equal(await storage.loadProfile(), null);
+
+  backing.setItem("mine_typing:profile", JSON.stringify({
+    id: "wrong-types",
+    settings: { sound: true, reducedMotion: "yes", showVirtualKeyboard: true },
+    createdAt: "2026-09-05T10:00:00.000Z",
+    updatedAt: "2026-09-05T10:00:00.000Z",
+    schemaVersion: 1,
+  }));
+  assert.equal(await storage.loadProfile(), null);
+});
+
+test("a current-version Level result with a malformed shape is filtered out", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  backing.setItem("mine_typing:level-results", JSON.stringify([
+    {
+      levelId: "1", accuracy: "96", correctKeys: 48, incorrectKeys: 2, bestCombo: 18,
+      id: "string-accuracy", createdAt: "2026-09-05T10:00:00.000Z",
+      updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 1,
+    },
+    newLevelResult({ levelId: "1", accuracy: 96, correctKeys: 48, incorrectKeys: 2, bestCombo: 18 }),
+  ]));
+
+  const results = await storage.loadLevelResults();
+  assert.equal(results.length, 1);
+  assert.equal(results[0].accuracy, 96);
+});
