@@ -8,12 +8,18 @@
 
 import { DANGER_LANE, laneToWorldX } from "./layout";
 
-/** Seconds between spawns; the first Enemy walks immediately. */
+/** Default seconds between spawns; the first Enemy walks immediately. */
 export const SPAWN_INTERVAL = 5;
 /** Spawn edge, just off the framed field's right edge (field spans ±8). */
 export const SPAWN_X = 9;
-/** Uniform walk speed in world units per second (plan_a §7 prototype). */
+/** Default uniform walk speed in world units per second (plan_a §7). */
 export const WALK_SPEED = 0.85;
+
+/** Per-Level overrides; defaults keep the prototype's shared rhythm. */
+export type MotionOptions = {
+  walkSpeed?: number;
+  spawnInterval?: number;
+};
 /** Seconds a correct key freezes each Enemy it hit (plan_a §4). */
 export const HIT_STOP = 0.35;
 /** Distance from the Danger Line at which the mirror warns to hurry. */
@@ -36,6 +42,10 @@ export type MotionWorld = {
   queue: number[];
   /** Seconds until the next queued Enemy joins the walk. */
   spawnIn: number;
+  /** This Level's walk speed in world units per second. */
+  walkSpeed: number;
+  /** This Level's seconds between spawns. */
+  spawnInterval: number;
 };
 
 export type MotionStep = {
@@ -46,12 +56,17 @@ export type MotionStep = {
   breached: boolean;
 };
 
-export function createMotion(words: readonly string[]): MotionWorld {
+export function createMotion(
+  words: readonly string[],
+  options: MotionOptions = {},
+): MotionWorld {
   const [first, ...rest] = words.map((_, index) => index + 1);
   return {
     walking: first === undefined ? [] : [{ id: first, x: SPAWN_X, stun: 0 }],
     queue: rest,
-    spawnIn: SPAWN_INTERVAL,
+    spawnIn: options.spawnInterval ?? SPAWN_INTERVAL,
+    walkSpeed: options.walkSpeed ?? WALK_SPEED,
+    spawnInterval: options.spawnInterval ?? SPAWN_INTERVAL,
   };
 }
 
@@ -73,7 +88,7 @@ export function stepMotion(
     if (!aliveIds.has(enemy.id)) return enemy;
     const stun = Math.max(0, enemy.stun - dt);
     // Only the fraction of the step left after the hit-stop expires moves.
-    const x = enemy.x - WALK_SPEED * Math.max(0, dt - enemy.stun);
+    const x = enemy.x - world.walkSpeed * Math.max(0, dt - enemy.stun);
     return { ...enemy, stun, x };
   });
 
@@ -94,12 +109,18 @@ export function stepMotion(
       queue = queue.slice(1);
       spawnedIds.push(id);
       walking.push({ id, x: SPAWN_X, stun: 0 });
-      spawnIn += SPAWN_INTERVAL;
+      spawnIn += world.spawnInterval;
     }
   }
 
   return {
-    world: { walking, queue, spawnIn: Math.max(spawnIn, 0) },
+    world: {
+      walking,
+      queue,
+      spawnIn: Math.max(spawnIn, 0),
+      walkSpeed: world.walkSpeed,
+      spawnInterval: world.spawnInterval,
+    },
     spawnedIds,
     breached,
   };

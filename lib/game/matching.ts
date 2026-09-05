@@ -39,18 +39,20 @@ export function matchedLetters(word: string, sequence: string): number {
 }
 
 /**
- * Apply one key. Returns null for keys outside A-Z so callers can ignore
- * them. A miss resets the group (Words return to white); completing a Word
- * defeats every enemy carrying it — identical Words die together — and
- * clears the group so the next key opens a fresh search.
+ * Apply one key. Returns null for keys outside the trained keyspace
+ * (A–Z plus the home-row semicolon) so callers can ignore them. A miss
+ * resets the group (Words return to white); completing a Word defeats
+ * every enemy carrying it — identical Words die together — and clears the
+ * group so the next key opens a fresh search.
  */
 export function applyKey<T extends EnemyState>(
   currentEnemies: readonly T[],
   currentProgress: GameProgress,
   rawKey: string,
 ): { enemies: T[]; progress: GameProgress; event: KeyEvent } | null {
-  const key = rawKey.toUpperCase();
-  if (!/^[A-Z]$/.test(key)) return null;
+  // ";" types lowercase and uppercases to itself, so it passes through.
+  const key = rawKey === ";" ? ";" : rawKey.toUpperCase();
+  if (!/^[A-Z;]$/.test(key)) return null;
 
   const active = currentEnemies.filter((enemy) => !enemy.defeated);
   const nextSequence = currentProgress.sequence + key;
