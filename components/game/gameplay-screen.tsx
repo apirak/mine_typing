@@ -7,11 +7,13 @@
 // load effect (re)seeds from that same data on every route entry.
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { Play, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
+import { Volume2, VolumeX, X } from "lucide-react";
 
 import { Battlefield } from "@/components/game/battlefield";
+import { OutcomeCard } from "@/components/game/outcome-card";
 import { activeEnemies } from "@/lib/game/matching";
 import { KEY_FINGERS, type Level } from "@/lib/game/levels";
+import { accuracyPercent } from "@/lib/game/storage";
 import { readyFeedback, useGameStore } from "@/lib/game/store";
 
 const ROWS = [
@@ -30,6 +32,8 @@ export function GameplayScreen({ level }: { level: Level }) {
   const combo = useGameStore((state) => state.combo);
   const paused = useGameStore((state) => state.paused);
   const sound = useGameStore((state) => state.sound);
+  const showVirtualKeyboard = useGameStore((state) => state.showVirtualKeyboard);
+  const levelBest = useGameStore((state) => state.levelBest);
   const lastKey = useGameStore((state) => state.lastKey);
   const shakeTick = useGameStore((state) => state.shakeTick);
   const typeKey = useGameStore((state) => state.typeKey);
@@ -48,7 +52,7 @@ export function GameplayScreen({ level }: { level: Level }) {
   const [shaking, setShaking] = useState(false);
   const remaining = activeEnemies(enemies).length;
   const defeatedCount = enemies.length - remaining;
-  const accuracy = hits + misses === 0 ? 100 : Math.round((hits / (hits + misses)) * 100);
+  const accuracy = accuracyPercent(hits, misses);
   const progress = (defeatedCount / level.words.length) * 100;
 
   const reset = useCallback(() => {
@@ -60,6 +64,12 @@ export function GameplayScreen({ level }: { level: Level }) {
   useEffect(() => {
     useGameStore.getState().loadLevel(level.id);
   }, [level.id]);
+
+  // Restore persisted settings and this Level's bests (ticket #5). The
+  // server render shows the defaults; the client corrects after load.
+  useEffect(() => {
+    void useGameStore.getState().hydrate();
+  }, []);
 
   useEffect(() => {
     if (shakeTick === 0) return;
@@ -102,20 +112,24 @@ export function GameplayScreen({ level }: { level: Level }) {
       <Battlefield level={level} />
       <footer className="typing-deck">
         <div className="feedback-row"><div><span className="status-light"/> {feedback}</div><span>{sequence ? <>Sequence <strong>{sequence}</strong></> : "Waiting for a new target"}</span></div>
-        <div className="keyboard" aria-label="On-screen keyboard">{ROWS.map((row,rowIndex)=><div className={`key-row row-${rowIndex}`} key={rowIndex}>{row.map((key)=>{
+        {showVirtualKeyboard && <div className="keyboard" aria-label="On-screen keyboard">{ROWS.map((row,rowIndex)=><div className={`key-row row-${rowIndex}`} key={rowIndex}>{row.map((key)=>{
           const trained = level.trainedKeys.includes(key);
           const classes = [trained && "training-key", lastKey === key && "pressed"].filter(Boolean).join(" ");
           return <button key={key} data-key={key} onClick={()=>typeKey(key)} className={classes || undefined}><span>{key}</span>{trained && <i/>}</button>;
-        })}</div>)}</div>
+        })}</div>)}</div>}
         <p className="hint">{level.trainedKeys.map((key, index) => <Fragment key={key}><kbd>{key}</kbd> {KEY_FINGERS[key]} {index < level.trainedKeys.length - 1 && <span>•</span>} </Fragment>)}<span>•</span> Press <kbd>Esc</kbd> to pause</p>
       </footer>
-      {(paused || phase !== "playing") && <div className="overlay" role="dialog" aria-modal="true"><div className="pause-card">
-        <span className="card-kicker">{phase === "game-over" ? "GAME OVER" : phase === "level-complete" ? "NICE WORK" : "GAME PAUSED"}</span>
-        <h1>{phase === "game-over" ? "A creature got through" : phase === "level-complete" ? "Level cleared!" : "Take a breath"}</h1>
-        <p>{phase === "game-over" ? "It reached the Danger Line. Restart the level to try again." : phase === "level-complete" ? `${accuracy}% accuracy · ${hits} correct keys` : "Your progress is safe. Continue whenever you are ready."}</p>
-        {paused && phase === "playing" && <button className="primary-button" onClick={()=>{setPaused(false);gameRef.current?.focus();}}><Play size={18} fill="currentColor"/> Continue</button>}
-        <button className="secondary-button" onClick={reset}><RotateCcw size={18}/> Restart level</button>
-      </div></div>}
+      {(paused || phase !== "playing") && <div className="overlay" role="dialog" aria-modal="true">
+        <OutcomeCard
+          phase={phase}
+          paused={paused}
+          accuracy={accuracy}
+          hits={hits}
+          best={levelBest}
+          onContinue={()=>{setPaused(false);gameRef.current?.focus();}}
+          onRestart={reset}
+        />
+      </div>}
     </section>
   </main>;
 }
