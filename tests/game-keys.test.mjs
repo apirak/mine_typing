@@ -17,11 +17,13 @@ after(async () => {
   await vite.close();
 });
 
-const { typedKeyFromEvent } = await vite.ssrLoadModule("/lib/game/keys.ts");
+const { typedKeyFromEvent, isForeignLetterEvent } = await vite.ssrLoadModule(
+  "/lib/game/keys.ts",
+);
 
-// Physical keyboards report the layout's character in `key` and the
-// position of the pressed key in `code`. The game keyspace is A–Z plus
-// the home-row semicolon, whatever the active input source is.
+// The game reads what the player actually typed (`key`), never which
+// physical key it was (`code`): a non-English input source is the
+// player's setup to fix, not the game's to reinterpret.
 
 test("a Latin letter maps to its uppercase game key in any case", () => {
   assert.equal(typedKeyFromEvent({ key: "f", code: "KeyF" }), "F");
@@ -33,18 +35,28 @@ test("the semicolon passes through as its own game key", () => {
   assert.equal(typedKeyFromEvent({ key: ";", code: "Semicolon" }), ";");
 });
 
-test("a non-Latin input source falls back to the physical key position", () => {
+test("non-Latin input never resolves through the key's position", () => {
   // Thai Kedmanee: the F position types "ฟ", the J position "แ".
-  assert.equal(typedKeyFromEvent({ key: "ฟ", code: "KeyF" }), "F");
-  assert.equal(typedKeyFromEvent({ key: "แ", code: "KeyJ" }), "J");
-  // A dead key or accented character on the same position resolves too.
-  assert.equal(typedKeyFromEvent({ key: "Dead", code: "KeyA" }), "A");
-  assert.equal(typedKeyFromEvent({ key: "ƒ", code: "KeyF" }), "F");
+  assert.equal(typedKeyFromEvent({ key: "ฟ", code: "KeyF" }), null);
+  assert.equal(typedKeyFromEvent({ key: "แ", code: "KeyJ" }), null);
+  // Dead keys and accents are foreign input too.
+  assert.equal(typedKeyFromEvent({ key: "Dead", code: "KeyF" }), null);
+  assert.equal(typedKeyFromEvent({ key: "ƒ", code: "KeyF" }), null);
 });
 
-test("keys outside the game keyspace return null", () => {
-  assert.equal(typedKeyFromEvent({ key: "Shift", code: "ShiftLeft" }), null);
-  assert.equal(typedKeyFromEvent({ key: "1", code: "Digit1" }), null);
-  assert.equal(typedKeyFromEvent({ key: "Escape", code: "Escape" }), null);
-  assert.equal(typedKeyFromEvent({ key: "ฟ", code: "" }), null);
+test("a letter position typed with a non-Latin character raises the foreign flag", () => {
+  assert.equal(isForeignLetterEvent({ key: "ฟ", code: "KeyF" }), true);
+  assert.equal(isForeignLetterEvent({ key: "แ", code: "KeyJ" }), true);
+  assert.equal(isForeignLetterEvent({ key: "Dead", code: "KeyA" }), true);
+  assert.equal(isForeignLetterEvent({ key: "ƒ", code: "KeyF" }), true);
+});
+
+test("everything else stays outside the foreign flag", () => {
+  assert.equal(isForeignLetterEvent({ key: "f", code: "KeyF" }), false);
+  assert.equal(isForeignLetterEvent({ key: "F", code: "KeyF" }), false);
+  assert.equal(isForeignLetterEvent({ key: "Shift", code: "ShiftLeft" }), false);
+  assert.equal(isForeignLetterEvent({ key: "1", code: "Digit1" }), false);
+  assert.equal(isForeignLetterEvent({ key: "Enter", code: "Enter" }), false);
+  assert.equal(isForeignLetterEvent({ key: " ", code: "Space" }), false);
+  assert.equal(isForeignLetterEvent({ key: "ฟ", code: "" }), false);
 });
