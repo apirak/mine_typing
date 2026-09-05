@@ -1,9 +1,8 @@
-// The default route plays World 1's first Level; Levels live at /level/[id]
-// and a Level Select screen arrives with ticket #6.
+// The Home route (ticket #6): the front door of the loop — Play leads to
+// Level Select, Settings to the persisted toggles.
 
-import { GameplayScreen } from "@/components/game/gameplay-screen";
-import { WORLD_ONE } from "@/lib/game/levels";
+import { HomeScreen } from "@/components/game/home-screen";
 
-export default function Home() {
-  return <GameplayScreen level={WORLD_ONE[0]} />;
+export default function Page() {
+  return <HomeScreen />;
 }

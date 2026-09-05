@@ -175,3 +175,93 @@ test("a current-version Level result with a malformed shape is filtered out", as
   assert.equal(results.length, 1);
   assert.equal(results[0].accuracy, 96);
 });
+
+// Ticket #6 grows the records (music/volume settings, run time) without a
+// schema bump: fields the old app never wrote stay optional to the reader
+// so an upgrade never wipes a player's progress.
+
+test("a result saved before run time existed still loads", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  backing.setItem("mine_typing:level-results", JSON.stringify([
+    {
+      levelId: "2", accuracy: 91, correctKeys: 30, incorrectKeys: 3, bestCombo: 9,
+      id: "pre-time", createdAt: "2026-09-05T10:00:00.000Z",
+      updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 1,
+    },
+  ]));
+
+  const results = await storage.loadLevelResults();
+  assert.equal(results.length, 1);
+  assert.equal(results[0].elapsedSeconds, undefined);
+});
+
+test("a result with a non-numeric run time is filtered out", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  backing.setItem("mine_typing:level-results", JSON.stringify([
+    {
+      levelId: "2", accuracy: 91, correctKeys: 30, incorrectKeys: 3, bestCombo: 9,
+      elapsedSeconds: "fast",
+      id: "string-time", createdAt: "2026-09-05T10:00:00.000Z",
+      updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 1,
+    },
+    newLevelResult({ levelId: "2", accuracy: 91, correctKeys: 30, incorrectKeys: 3, bestCombo: 9, elapsedSeconds: 52 }),
+  ]));
+
+  const results = await storage.loadLevelResults();
+  assert.equal(results.length, 1);
+  assert.equal(results[0].elapsedSeconds, 52);
+});
+
+test("a profile saved before music and volume existed still loads", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  backing.setItem("mine_typing:profile", JSON.stringify({
+    id: "old-settings", settings: DEFAULT_SETTINGS,
+    createdAt: "2026-09-05T10:00:00.000Z", updatedAt: "2026-09-05T10:00:00.000Z",
+    schemaVersion: 1,
+  }));
+
+  const profile = await storage.loadProfile();
+  assert.equal(profile.settings.sound, true);
+});
+
+test("a profile with damaged music or volume reads as absent", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  backing.setItem("mine_typing:profile", JSON.stringify({
+    id: "loud", settings: { ...DEFAULT_SETTINGS, music: "yes", volume: 80 },
+    createdAt: "2026-09-05T10:00:00.000Z", updatedAt: "2026-09-05T10:00:00.000Z",
+    schemaVersion: 1,
+  }));
+  assert.equal(await storage.loadProfile(), null);
+
+  backing.setItem("mine_typing:profile", JSON.stringify({
+    id: "too-loud", settings: { ...DEFAULT_SETTINGS, music: true, volume: 180 },
+    createdAt: "2026-09-05T10:00:00.000Z", updatedAt: "2026-09-05T10:00:00.000Z",
+    schemaVersion: 1,
+  }));
+  assert.equal(await storage.loadProfile(), null);
+});
+
+test("clearLevelResults forgets every run but keeps the profile's settings", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  await storage.saveProfile(newProfile(DEFAULT_SETTINGS, "2026-09-05T10:00:00.000Z"));
+  await storage.saveLevelResult(
+    newLevelResult({ levelId: "1", accuracy: 96, correctKeys: 48, incorrectKeys: 2, bestCombo: 18 }),
+  );
+
+  await storage.clearLevelResults();
+
+  assert.deepEqual(await storage.loadLevelResults(), []);
+  const profile = await storage.loadProfile();
+  assert.equal(profile.settings.sound, true);
+});
+
+test("clearLevelResults on empty storage stays empty", async () => {
+  const storage = createLocalGameStorage(fakeBacking());
+  await storage.clearLevelResults();
+  assert.deepEqual(await storage.loadLevelResults(), []);
+});

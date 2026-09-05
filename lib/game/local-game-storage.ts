@@ -35,9 +35,20 @@ const isCurrentSchema = (value: unknown): value is Record<string, unknown> =>
 
 const isBoolean = (value: unknown): boolean => typeof value === "boolean";
 
+/** Number within an inclusive range; the settings' volume is 0–100. */
+const isBoundedNumber = (value: unknown, min: number, max: number): boolean =>
+  typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
+
+// Ticket #6 grew the records (music/volume, run time) without a schema
+// bump: fields a pre-#6 app never wrote stay optional to the reader, so
+// upgrading never reads a player's old records as absent. A present field
+// with a damaged type still rejects the record, as before.
+
 const isValidSettings = (value: unknown): boolean =>
   isRecord(value) &&
   isBoolean(value.sound) &&
+  (value.music === undefined || isBoolean(value.music)) &&
+  (value.volume === undefined || isBoundedNumber(value.volume, 0, 100)) &&
   (value.reducedMotion === null || isBoolean(value.reducedMotion)) &&
   isBoolean(value.showVirtualKeyboard);
 
@@ -52,7 +63,8 @@ const isValidResult = (value: unknown): boolean =>
   typeof value.accuracy === "number" &&
   typeof value.correctKeys === "number" &&
   typeof value.incorrectKeys === "number" &&
-  typeof value.bestCombo === "number";
+  typeof value.bestCombo === "number" &&
+  (value.elapsedSeconds === undefined || typeof value.elapsedSeconds === "number");
 
 export function createLocalGameStorage(backing: StorageLike) {
   const writeJson = (key: string, value: unknown) =>
@@ -80,5 +92,11 @@ export function createLocalGameStorage(backing: StorageLike) {
     },
 
     loadLevelResults,
+
+    // Reset progress (ticket #6) forgets runs only: the Storage-like
+    // backing has no delete, and an empty array reads exactly like one.
+    clearLevelResults: async () => {
+      writeJson(RESULTS_KEY, []);
+    },
   };
 }

@@ -11,7 +11,12 @@ const vite = await createServer({
   appType: "custom",
   configFile: false,
   root,
-  resolve: { alias: { "@": root } },
+  resolve: {
+    alias: [
+      { find: /^next\/navigation$/, replacement: `${root}/tests/fake-navigation.ts` },
+      { find: "@", replacement: root },
+    ],
+  },
   server: { middlewareMode: true },
 });
 
@@ -19,21 +24,23 @@ after(async () => {
   await vite.close();
 });
 
+// app/page.tsx is the Home screen since ticket #6; the gameplay page test
+// moved with it — the route under test is now /level/1.
+
 async function renderGameplayPage() {
-  const { default: Home } = await vite.ssrLoadModule("/app/page.tsx");
-  return renderToStaticMarkup(React.createElement(Home));
+  const { default: LevelPage } = await vite.ssrLoadModule(
+    "/app/level/[id]/page.tsx",
+  );
+  const element = await LevelPage({ params: Promise.resolve({ id: "1" }) });
+  return renderToStaticMarkup(element);
 }
 
-async function renderOutcomeCard(props) {
-  const { OutcomeCard } = await vite.ssrLoadModule(
-    "/components/game/outcome-card.tsx",
+async function renderPauseCard(props) {
+  const { PauseCard } = await vite.ssrLoadModule(
+    "/components/game/pause-card.tsx",
   );
   return renderToStaticMarkup(
-    React.createElement(OutcomeCard, {
-      paused: false,
-      accuracy: 83,
-      hits: 5,
-      best: null,
+    React.createElement(PauseCard, {
       onContinue: () => {},
       onRestart: () => {},
       ...props,
@@ -72,31 +79,13 @@ test("a WebGL-less canvas still renders a fallback message in the scene area", a
   assert.match(html, /class="scene-canvas"/);
 });
 
-test("the level-complete card shows the run and the Level's best accuracy and combo", async () => {
-  const html = await renderOutcomeCard({
-    phase: "level-complete",
-    best: { accuracy: 96, combo: 18 },
-  });
+test("the pause card interrupts a live run with continue and restart", async () => {
+  const html = await renderPauseCard({});
 
-  assert.match(html, /Level cleared!/);
-  assert.match(html, /83% accuracy · 5 correct keys/);
-  assert.match(html, /Best: 96% accuracy · ×18 combo/);
-});
-
-test("the level-complete card hides the best line until the Level has stored bests", async () => {
-  const html = await renderOutcomeCard({ phase: "level-complete" });
-
-  assert.match(html, /Level cleared!/);
-  assert.doesNotMatch(html, /Best:/);
-});
-
-test("the game-over card stays its own state, without a best line", async () => {
-  const html = await renderOutcomeCard({
-    phase: "game-over",
-    best: { accuracy: 96, combo: 18 },
-  });
-
-  assert.match(html, /GAME OVER/);
-  assert.match(html, /A creature got through/);
-  assert.doesNotMatch(html, /Best:/);
+  assert.match(html, /GAME PAUSED/);
+  assert.match(html, /Continue/);
+  assert.match(html, /Restart level/);
+  // The run's outcome lives on the Result screen now.
+  assert.doesNotMatch(html, /GAME OVER/);
+  assert.doesNotMatch(html, /Level cleared!/);
 });

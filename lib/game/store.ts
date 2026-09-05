@@ -71,6 +71,7 @@ const freshRunState = (level: Level) => ({
   bestCombo: 0,
   paused: false,
   dangerNear: false,
+  elapsedSeconds: 0,
   feedback: readyFeedback(level),
   lastKey: "",
   shakeTick: 0,
@@ -94,6 +95,10 @@ type GameStore = {
   bestCombo: number;
   paused: boolean;
   sound: boolean;
+  /** Background music toggle (plan_a §13); the loop itself comes later. */
+  music: boolean;
+  /** Master volume, 0–100 (plan_a §13). */
+  volume: number;
   /** Stored reduced-motion choice; null defers to the OS preference. */
   reducedMotion: boolean | null;
   showVirtualKeyboard: boolean;
@@ -101,6 +106,8 @@ type GameStore = {
   levelBest: LevelBest | null;
   /** True while an active Enemy is closing on the Danger Line. */
   dangerNear: boolean;
+  /** Play time of the current run in seconds; frozen while paused. */
+  elapsedSeconds: number;
   feedback: string;
   lastKey: string;
   shakeTick: number;
@@ -115,8 +122,12 @@ type GameStore = {
   reset: () => void;
   setPaused: (paused: boolean) => void;
   toggleSound: () => void;
+  toggleMusic: () => void;
+  setVolume: (volume: number) => void;
   setReducedMotion: (reducedMotion: boolean | null) => void;
   setShowVirtualKeyboard: (showVirtualKeyboard: boolean) => void;
+  /** Forget every saved run (settings stay); the Settings screen's Reset. */
+  resetProgress: () => void;
   /** Restore persisted settings and the loaded Level's bests (client-side). */
   hydrate: () => Promise<void>;
 };
@@ -125,6 +136,8 @@ export const useGameStore = create<GameStore>((set, get) => {
   // The settings slice as the storage interface sees it.
   const settingsOf = (state: GameStore): GameSettings => ({
     sound: state.sound,
+    music: state.music,
+    volume: state.volume,
     reducedMotion: state.reducedMotion,
     showVirtualKeyboard: state.showVirtualKeyboard,
   });
@@ -167,7 +180,7 @@ export const useGameStore = create<GameStore>((set, get) => {
   /** Save a completed run, then surface its effect on the Level's bests. */
   const persistLevelResult = (
     levelId: string,
-    progress: { hits: number; misses: number; combo: number },
+    progress: { hits: number; misses: number; combo: number; elapsedSeconds: number },
   ) => {
     const record = newLevelResult({
       levelId,
@@ -175,6 +188,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       correctKeys: progress.hits,
       incorrectKeys: progress.misses,
       bestCombo: progress.combo,
+      elapsedSeconds: progress.elapsedSeconds,
     });
     gameStorage()
       .saveLevelResult(record)
@@ -188,6 +202,8 @@ export const useGameStore = create<GameStore>((set, get) => {
     level: firstLevel,
     ...freshRunState(firstLevel),
     sound: true,
+    music: true,
+    volume: 80,
     reducedMotion: null,
     showVirtualKeyboard: true,
     levelBest: null,
@@ -251,6 +267,7 @@ export const useGameStore = create<GameStore>((set, get) => {
           hits: result.progress.hits,
           misses: result.progress.misses,
           combo: bestCombo,
+          elapsedSeconds: state.elapsedSeconds,
         });
       }
     },
@@ -259,24 +276,28 @@ export const useGameStore = create<GameStore>((set, get) => {
       const state = get();
       if (state.paused || state.phase !== "playing") return;
 
+      // Play time advances only on live frames, so pauses and end phases
+      // stay out of the run's time (Result's CPM and the 3★ time target).
+      const elapsedSeconds = state.elapsedSeconds + dt;
       const aliveIds = new Set(activeEnemies(state.enemies).map((enemy) => enemy.id));
       const step = stepMotion(gameMotion.world, dt, aliveIds);
       gameMotion.world = step.world;
 
       if (step.breached) {
-        set({ phase: "game-over", feedback: "A creature reached the Danger Line" });
+        set({ phase: "game-over", elapsedSeconds, feedback: "A creature reached the Danger Line" });
         return;
       }
+
+      const patch: Partial<GameStore> = { elapsedSeconds };
       if (step.spawnedIds.length > 0) {
-        set({
-          enemies: [
-            ...state.enemies,
-            ...step.spawnedIds.map((id) => freshEnemy(state.level, id)),
-          ],
-        });
+        patch.enemies = [
+          ...state.enemies,
+          ...step.spawnedIds.map((id) => freshEnemy(state.level, id)),
+        ];
       }
       const dangerNear = nearDanger(step.world, aliveIds);
-      if (dangerNear !== state.dangerNear) set({ dangerNear });
+      if (dangerNear !== state.dangerNear) patch.dangerNear = dangerNear;
+      set(patch);
     },
 
     loadLevel: (id) => {
@@ -293,36 +314,55 @@ export const useGameStore = create<GameStore>((set, get) => {
       set(freshRunState(level));
     },
 
-    setPaused: (paused) => set({ paused }),
-    toggleSound: () => {
-      set((state) => ({ sound: !state.sound }));
-      persistSettings();
-    },
-    setReducedMotion: (reducedMotion) => {
-      set({ reducedMotion });
-      persistSettings();
-    },
-    setShowVirtualKeyboard: (showVirtualKeyboard) => {
-      set({ showVirtualKeyboard });
-      persistSettings();
-    },
+  setPaused: (paused) => set({ paused }),
+  toggleSound: () => {
+    set((state) => ({ sound: !state.sound }));
+    persistSettings();
+  },
+  toggleMusic: () => {
+    set((state) => ({ music: !state.music }));
+    persistSettings();
+  },
+  setVolume: (volume) => {
+    set({ volume: Math.min(100, Math.max(0, Math.round(volume))) });
+    persistSettings();
+  },
+  setReducedMotion: (reducedMotion) => {
+    set({ reducedMotion });
+    persistSettings();
+  },
+  setShowVirtualKeyboard: (showVirtualKeyboard) => {
+    set({ showVirtualKeyboard });
+    persistSettings();
+  },
+  /** Reset progress (ticket #6): forget every saved run; settings stay. */
+  resetProgress: () => {
+    set({ levelBest: null });
+    gameStorage()
+      .clearLevelResults()
+      .catch(() => {
+        // Best-effort: a failed clear never breaks the session.
+      });
+  },
 
-    hydrate: async () => {
-      // Best-effort restore: a storage failure keeps the defaults.
-      try {
-        const profile = await gameStorage().loadProfile();
-        if (profile) {
-          const { settings } = profile;
-          set({
-            sound: settings.sound,
-            reducedMotion: settings.reducedMotion,
-            showVirtualKeyboard: settings.showVirtualKeyboard,
-          });
-        }
-      } catch {
-        // Storage read failed; defaults stay.
+  hydrate: async () => {
+    // Best-effort restore: a storage failure keeps the defaults.
+    try {
+      const profile = await gameStorage().loadProfile();
+      if (profile) {
+        const { settings } = profile;
+        set({
+          sound: settings.sound,
+          music: settings.music ?? true,
+          volume: settings.volume ?? 80,
+          reducedMotion: settings.reducedMotion,
+          showVirtualKeyboard: settings.showVirtualKeyboard,
+        });
       }
-      await refreshBests(get().level.id);
-    },
+    } catch {
+      // Storage read failed; defaults stay.
+    }
+    await refreshBests(get().level.id);
+  },
   };
 });
