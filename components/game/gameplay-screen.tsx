@@ -11,6 +11,7 @@ import { Volume2, VolumeX, X } from "lucide-react";
 
 import { Battlefield } from "@/components/game/battlefield";
 import { OutcomeCard } from "@/components/game/outcome-card";
+import { typedKeyFromEvent } from "@/lib/game/keys";
 import { activeEnemies } from "@/lib/game/matching";
 import { KEY_FINGERS, type Level } from "@/lib/game/levels";
 import { accuracyPercent } from "@/lib/game/storage";
@@ -93,7 +94,11 @@ export function GameplayScreen({ level }: { level: Level }) {
         }
         return;
       }
-      typeKey(event.key);
+      // Non-Latin input sources (Thai layouts, dead keys) type layout
+      // characters; resolve the pressed key's position so touch typing
+      // keeps working whatever the layout is.
+      const key = typedKeyFromEvent(event);
+      if (key) typeKey(key);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
