@@ -69,12 +69,13 @@ export function VoxelPlayer() {
 
     if (phase === "game-over") {
       // Defeat: a slump — bow and sink toward the Danger Line side,
-      // arms hanging limp. Reduced motion keeps only a mild bow.
+      // arms hanging limp. Reduced motion keeps a mild, slow bow.
       const p = (reactionT.current = Math.min(1, reactionT.current + delta / 0.45));
-      torso.rotation.z = -0.9 * p;
-      root.position.y = -0.2 * p;
-      leftArm.rotation.z = 0.1 * p;
-      rightArm.rotation.z = 0.55 - 0.45 * p;
+      const slump = p * (reducedMotion ? 0.45 : 1);
+      torso.rotation.z = -0.9 * slump;
+      root.position.y = -0.2 * slump;
+      leftArm.rotation.z = 0.1 * slump;
+      rightArm.rotation.z = 0.55 - 0.45 * slump;
       return;
     }
 
