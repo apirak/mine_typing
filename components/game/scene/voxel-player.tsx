@@ -10,9 +10,13 @@ import { useGameStore } from "@/lib/game/store";
 import { useReducedMotion } from "../use-reduced-motion";
 
 // The Player: an original voxel figure at the far left. Idle breathing
-// while thinking; every correct key swings the tool (story 3/4).
+// while thinking; every correct key swings the tool (story 3/4). The run's
+// end reads on the Player too (story 21): a jump with both arms raised on
+// level complete, a slump toward the Danger Line on game over — toned way
+// down under reduced motion.
 export function VoxelPlayer() {
   const attackTick = useGameStore((state) => state.attackTick);
+  const phase = useGameStore((state) => state.phase);
   const reducedMotion = useReducedMotion();
 
   const rootRef = useRef<Group>(null);
@@ -21,6 +25,11 @@ export function VoxelPlayer() {
   const rightArmRef = useRef<Group>(null);
   const swingT = useRef(1);
   const lastAttackTick = useRef(attackTick);
+  // Reaction clock: 0 when the phase leaves "playing", 1 once settled.
+  // Reset inside the frame loop (not an effect) so the reaction starts on
+  // the very first frame that sees the new phase.
+  const reactionT = useRef(1);
+  const lastPhase = useRef(phase);
 
   useEffect(() => {
     if (attackTick !== lastAttackTick.current) {
@@ -30,10 +39,15 @@ export function VoxelPlayer() {
   }, [attackTick]);
 
   useFrame(({ clock }, delta) => {
+    const root = rootRef.current;
     const torso = torsoRef.current;
     const rightArm = rightArmRef.current;
     const leftArm = leftArmRef.current;
-    if (!torso || !rightArm || !leftArm) return;
+    if (!root || !torso || !rightArm || !leftArm) return;
+    if (phase !== lastPhase.current) {
+      lastPhase.current = phase;
+      reactionT.current = 0;
+    }
     const t = clock.getElapsedTime();
 
     // Idle breathing, toned down (or off) under reduced motion.
@@ -41,7 +55,34 @@ export function VoxelPlayer() {
     torso.scale.y = 1 + breath;
     leftArm.rotation.x = reducedMotion ? 0 : Math.sin(t * 1.9 + 0.6) * 0.06;
 
+    if (phase === "level-complete") {
+      // Victory: both arms thrown up and waving, jumps fading out over a
+      // second — the handoff to Result waits that long for it.
+      const p = (reactionT.current = Math.min(1, reactionT.current + delta));
+      const up = p * (reducedMotion ? 1.5 : 2.35 + Math.sin(t * 9) * 0.12);
+      leftArm.rotation.z = -up;
+      rightArm.rotation.z = up;
+      root.position.y =
+        reducedMotion ? 0 : Math.abs(Math.sin(p * Math.PI * 3)) * 0.55 * (1 - p);
+      return;
+    }
+
+    if (phase === "game-over") {
+      // Defeat: a slump — bow and sink toward the Danger Line side,
+      // arms hanging limp. Reduced motion keeps only a mild bow.
+      const p = (reactionT.current = Math.min(1, reactionT.current + delta / 0.45));
+      torso.rotation.z = -0.9 * p;
+      root.position.y = -0.2 * p;
+      leftArm.rotation.z = 0.1 * p;
+      rightArm.rotation.z = 0.55 - 0.45 * p;
+      return;
+    }
+
     // Attack swing: raise and chop toward the enemies, back within ~0.3s.
+    // Also restores whatever a finished celebration or slump left behind.
+    torso.rotation.z = 0;
+    root.position.y = 0;
+    leftArm.rotation.z = 0;
     if (swingT.current < 1) {
       swingT.current = Math.min(1, swingT.current + delta / 0.28);
       const p = swingT.current;
