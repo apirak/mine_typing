@@ -24,6 +24,10 @@ const ROWS = [
   ["Z", "X", "C", "V", "B", "N", "M"],
 ];
 
+// The beat before the gameplay screen hands off to Result: long enough
+// for the Player's celebration to read (story 21), short on game over.
+const HANDOFF_DELAY_MS = { "level-complete": 1100, "game-over": 450 } as const;
+
 export function GameplayScreen({ level }: { level: Level }) {
   const router = useRouter();
   const storeLevelId = useGameStore((state) => state.level.id);
@@ -76,7 +80,7 @@ export function GameplayScreen({ level }: { level: Level }) {
     if (phase !== "level-complete" && phase !== "game-over") return;
     const timer = window.setTimeout(
       () => router.push(`/level/${level.id}/result`),
-      450,
+      HANDOFF_DELAY_MS[phase],
     );
     return () => window.clearTimeout(timer);
   }, [phase, level.id, router]);
