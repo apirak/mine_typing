@@ -24,6 +24,10 @@ const ROWS = [
   ["Z", "X", "C", "V", "B", "N", "M"],
 ];
 
+// Home-row bumps belong on F and J alone, like a physical keyboard's
+// tactile dashes — never on the keys a Level paints green.
+const HOME_KEYS = new Set(["F", "J"]);
+
 // The beat before the gameplay screen hands off to Result: long enough
 // for the Player's celebration to read (story 21), short on game over.
 const HANDOFF_DELAY_MS = { "level-complete": 1100, "game-over": 450 } as const;
@@ -145,7 +149,7 @@ export function GameplayScreen({ level }: { level: Level }) {
         {showVirtualKeyboard && <div className="keyboard" aria-label="On-screen keyboard">{ROWS.map((row,rowIndex)=><div className={`key-row row-${rowIndex}`} key={rowIndex}>{row.map((key)=>{
           const trained = level.trainedKeys.includes(key);
           const classes = [trained && "training-key", lastKey === key && "pressed"].filter(Boolean).join(" ");
-          return <button key={key} data-key={key} onClick={()=>typeKey(key)} className={classes || undefined}><span>{key}</span>{trained && <i/>}</button>;
+          return <button key={key} data-key={key} onClick={()=>typeKey(key)} className={classes || undefined}><span>{key}</span>{HOME_KEYS.has(key) && <i/>}</button>;
         })}</div>)}</div>}
         <p className="hint">{level.trainedKeys.map((key, index) => <Fragment key={key}><kbd>{key}</kbd> {KEY_FINGERS[key]} {index < level.trainedKeys.length - 1 && <span>•</span>} </Fragment>)}<span>•</span> Press <kbd>Esc</kbd> to pause</p>
       </footer>
