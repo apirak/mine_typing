@@ -25,13 +25,13 @@ after(async () => {
 });
 
 // app/page.tsx is the Home screen since ticket #6; the gameplay page test
-// moved with it — the route under test is now /level/1.
+// moved with it — the route under test is now /level/1-1.
 
 async function renderGameplayPage() {
   const { default: LevelPage } = await vite.ssrLoadModule(
     "/app/level/[id]/page.tsx",
   );
-  const element = await LevelPage({ params: Promise.resolve({ id: "1" }) });
+  const element = await LevelPage({ params: Promise.resolve({ id: "1-1" }) });
   return renderToStaticMarkup(element);
 }
 
@@ -52,22 +52,22 @@ test("gameplay page server-renders the 3D canvas, HUD, and keyboard", async () =
   const html = await renderGameplayPage();
 
   assert.match(html, /<canvas/i);
-  assert.match(html, /Level 1 · F \+ J/);
+  assert.match(html, /Level 1-1 · F \+ J/);
   assert.match(html, /ACCURACY/);
   assert.match(html, /COMBO/);
   assert.match(html, /On-screen keyboard/);
   assert.match(html, /YOUR MISSION/);
-  assert.match(html, /Clear 4 creatures/);
+  assert.match(html, /Clear 12 creatures/);
 });
 
 test("enemy words and match progress are mirrored offscreen for assistive tech", async () => {
   const html = await renderGameplayPage();
 
   assert.match(html, /aria-live="polite"/);
-  assert.match(html, /4 enemies remaining\./);
-  assert.match(html, /Word F:/);
-  assert.match(html, /Word F J: 0 of 2 letters matched/);
-  assert.match(html, /Word J F: 0 of 2 letters matched/);
+  assert.match(html, /12 enemies remaining\./);
+  assert.match(html, /Word f:/);
+  assert.match(html, /Word f j: 0 of 2 letters matched/);
+  assert.match(html, /Word j f: 0 of 2 letters matched/);
 });
 
 test("a WebGL-less canvas still renders a fallback message in the scene area", async () => {

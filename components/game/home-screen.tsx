@@ -32,7 +32,8 @@ export function HomeScreen() {
       // A focused control activates itself; the shortcuts stay free for
       // bare keypresses only.
       if (event.target instanceof HTMLElement && event.target.closest("button, input, a, select, textarea")) return;
-      const key = typedKeyFromEvent(event);
+      // Game keys keep their case (spec #15); menu shortcuts fold it.
+      const key = typedKeyFromEvent(event)?.toUpperCase();
       if (event.key === "Enter") {
         play();
       } else if (key === "S") {

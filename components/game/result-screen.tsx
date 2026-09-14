@@ -53,7 +53,8 @@ export function ResultScreen({ level }: { level: Level }) {
       } else if (event.key === "Escape") {
         select();
       } else {
-        const key = typedKeyFromEvent(event);
+        // Game keys keep their case (spec #15); menu shortcuts fold it.
+        const key = typedKeyFromEvent(event)?.toUpperCase();
         if (key === "R") retry();
         if (key === "L") select();
       }

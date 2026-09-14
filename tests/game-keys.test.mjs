@@ -9,7 +9,7 @@ const vite = await createServer({
   appType: "custom",
   configFile: false,
   root,
-  resolve: { alias: { "@": root } },
+  resolve: { alias: { "@" : root } },
   server: { middlewareMode: true },
 });
 
@@ -25,14 +25,28 @@ const { typedKeyFromEvent, isForeignLetterEvent } = await vite.ssrLoadModule(
 // physical key it was (`code`): a non-English input source is the
 // player's setup to fix, not the game's to reinterpret.
 
-test("a Latin letter maps to its uppercase game key in any case", () => {
-  assert.equal(typedKeyFromEvent({ key: "f", code: "KeyF" }), "F");
+test("a Latin letter keeps the case it was typed with", () => {
+  assert.equal(typedKeyFromEvent({ key: "f", code: "KeyF" }), "f");
   assert.equal(typedKeyFromEvent({ key: "F", code: "KeyF" }), "F");
-  assert.equal(typedKeyFromEvent({ key: "z", code: "KeyZ" }), "Z");
+  assert.equal(typedKeyFromEvent({ key: "z", code: "KeyZ" }), "z");
+  assert.equal(typedKeyFromEvent({ key: "Z", code: "KeyZ" }), "Z");
 });
 
 test("the semicolon passes through as its own game key", () => {
   assert.equal(typedKeyFromEvent({ key: ";", code: "Semicolon" }), ";");
+});
+
+test("digits map straight through", () => {
+  assert.equal(typedKeyFromEvent({ key: "1", code: "Digit1" }), "1");
+  assert.equal(typedKeyFromEvent({ key: "0", code: "Digit0" }), "0");
+});
+
+test("the curriculum's punctuation maps straight through", () => {
+  assert.equal(typedKeyFromEvent({ key: ".", code: "Period" }), ".");
+  assert.equal(typedKeyFromEvent({ key: ",", code: "Comma" }), ",");
+  assert.equal(typedKeyFromEvent({ key: "!", code: "Digit1", shiftKey: true }), "!");
+  assert.equal(typedKeyFromEvent({ key: "?", code: "Slash", shiftKey: true }), "?");
+  assert.equal(typedKeyFromEvent({ key: "'", code: "Quote" }), "'");
 });
 
 test("non-Latin input never resolves through the key's position", () => {

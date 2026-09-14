@@ -3,7 +3,20 @@
 // localStorage without touching gameplay. Pure types and record factories
 // live here — no DOM, no React — so the shape sits at the pure seam.
 
-export const SCHEMA_VERSION = 1;
+// v2 (spec #15): Level ids became "<world>-<level>" across five Worlds.
+// Records from v1 (World 1's ids "1"–"5") migrate on load.
+export const SCHEMA_VERSION = 2;
+/** The schema versions this build reads; anything newer stays absent. */
+export const READABLE_SCHEMA_VERSIONS: readonly number[] = [SCHEMA_VERSION, SCHEMA_VERSION - 1];
+
+/**
+ * Old World-1-only result ids ("1"–"5") mapped onto the new curriculum
+ * ids ("1-1"–"1-5"); other ids pass through untouched.
+ */
+export function migratedLevelId(levelId: string): string {
+  const world = Number(levelId);
+  return world >= 1 && world <= 5 ? `1-${world}` : levelId;
+}
 
 /** Fields every persisted record carries (spec #2 Implementation Decisions). */
 export type StorageRecord = {

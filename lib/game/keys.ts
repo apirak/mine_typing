@@ -6,14 +6,24 @@
 // event fields the game needs, so this stays assertable from node:test.
 
 /**
- * The typed game key — "A" through "Z", or the home-row semicolon — or
- * null when the input is anything else, including non-Latin characters
- * from another input source.
+ * Every matchable game key: letters in both cases, digits, `. , ! ? '`,
+ * and the home-row semicolon. The one spelling of the keyspace — matching
+ * validates against it too, so a curriculum key change lands once.
+ */
+export const GAME_KEY_PATTERN = /^[a-zA-Z0-9.,;!?']$/;
+
+/**
+ * The typed game key — a lowercase or Shift-capital letter, a digit,
+ * one of `. , ! ? '`, or the home-row semicolon — or null for anything
+ * else, including non-Latin characters from another input source. The
+ * case is preserved: a Shift capital is its own key, so Words with
+ * capitals match case-sensitively (spec #15). Menu shortcuts decide
+ * their own case policy by folding the result themselves.
  */
 export function typedKeyFromEvent(event: { key: string; code?: string }): string | null {
-  if (event.key === ";") return ";";
-  const key = event.key.toUpperCase();
-  return /^[A-Z]$/.test(key) ? key : null;
+  const key = event.key;
+  if (key === ";") return ";";
+  return /^[a-zA-Z0-9.,!?']$/.test(key) ? key : null;
 }
 
 /**
