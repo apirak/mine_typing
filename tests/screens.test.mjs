@@ -37,9 +37,9 @@ async function renderLevelSelect(props) {
   const { LevelSelect } = await vite.ssrLoadModule(
     "/components/game/level-select.tsx",
   );
-  const { WORLD_ONE } = await vite.ssrLoadModule("/lib/game/levels.ts");
+  const { WORLDS } = await vite.ssrLoadModule("/lib/game/levels.ts");
   return renderToStaticMarkup(
-    React.createElement(LevelSelect, { levels: WORLD_ONE, ...props }),
+    React.createElement(LevelSelect, { worlds: WORLDS, ...props }),
   );
 }
 
@@ -54,10 +54,10 @@ async function renderResultCard(props) {
   const { ResultCard } = await vite.ssrLoadModule(
     "/components/game/result-card.tsx",
   );
-  const { WORLD_ONE } = await vite.ssrLoadModule("/lib/game/levels.ts");
+  const { ALL_LEVELS } = await vite.ssrLoadModule("/lib/game/levels.ts");
   return renderToStaticMarkup(
     React.createElement(ResultCard, {
-      level: WORLD_ONE[0],
+      level: ALL_LEVELS[0],
       defeated: false,
       stats: { accuracy: 96, hits: 48, misses: 2, bestCombo: 18, elapsedSeconds: 33 },
       stars: 3,
@@ -93,28 +93,35 @@ test("the Home route exposes the sound and music quick toggles", async () => {
   assert.match(html, /Toggle music/);
 });
 
-test("Level Select lists every World 1 Level with its trained keys", async () => {
+test("Level Select groups all five Worlds with their Levels in order", async () => {
   const html = await renderLevelSelect({ progress: {} });
 
-  assert.match(html, /Level 1 · F \+ J/);
-  assert.match(html, /Level 5 · G \+ H/);
-  assert.match(html, /F/);
-  assert.match(html, /G \+ H/);
+  for (const label of ["ZOMBIE WORLD", "SKELETON WORLD", "CREEPER WORLD", "WITCH WORLD", "LITTLE ZOMBIE WORLD"]) {
+    assert.match(html, new RegExp(label));
+  }
+  assert.match(html, /Level 1-1 · F \+ J/);
+  assert.match(html, /Level 5-4 · The finale/);
+  assert.match(html, /data-level-id="2-10"/);
+  assert.match(html, /data-level-id="4-3"/);
+  // A Level with no trained keys shows what else it drills.
+  assert.match(html, /Shift \+ sentences/);
 });
 
-test("a fresh profile unlocks only the first Level", async () => {
+test("a fresh profile unlocks only the first Level of the curriculum", async () => {
   const html = await renderLevelSelect({ progress: {} });
 
   assert.match(html, /level-card[^"]*available/);
   assert.match(html, /Locked/);
   assert.match(html, /aria-disabled="true"/);
+  const first = html.match(/<button[^>]*data-level-id="1-1"[^>]*>/)[0];
+  assert.match(first, /available/);
 });
 
 test("a provided profile shows completed Levels with best accuracy and stars", async () => {
   const html = await renderLevelSelect({
     progress: {
-      "1": { best: { accuracy: 98, combo: 12 }, stars: 3 },
-      "2": { best: { accuracy: 91, combo: 7 }, stars: 2 },
+      "1-1": { best: { accuracy: 98, combo: 12 }, stars: 3 },
+      "1-2": { best: { accuracy: 91, combo: 7 }, stars: 2 },
     },
   });
 
@@ -122,10 +129,10 @@ test("a provided profile shows completed Levels with best accuracy and stars", a
   assert.match(html, /91%/);
   assert.match(html, /★★★/);
   assert.match(html, /★★/);
-  // With Level 2 completed, Level 3 is the available frontier.
-  const card3 = html.match(/<button[^>]*data-level-id="3"[^>]*>/)[0];
+  // With Level 1-2 completed, Level 1-3 is the available frontier.
+  const card3 = html.match(/<button[^>]*data-level-id="1-3"[^>]*>/)[0];
   assert.match(card3, /available/);
-  const card4 = html.match(/<button[^>]*data-level-id="4"[^>]*>/)[0];
+  const card4 = html.match(/<button[^>]*data-level-id="1-4"[^>]*>/)[0];
   assert.match(card4, /locked/);
 });
 
@@ -188,10 +195,10 @@ test("Game Over is a defeat variant of Result with Retry and no stars", async ()
 });
 
 test("the Result route renders the cleared Level's structure", async () => {
-  const html = await renderResultRoute("1");
+  const html = await renderResultRoute("1-1");
 
   assert.match(html, /aria-label="Result/);
-  assert.match(html, /Level 1 · F \+ J/);
+  assert.match(html, /Level 1-1 · F \+ J/);
 });
 
 test("the Result route for an unknown Level renders a not-found card", async () => {

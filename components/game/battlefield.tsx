@@ -4,7 +4,7 @@ import { Canvas } from "@react-three/fiber";
 import { Suspense } from "react";
 
 import { matchedLetters } from "@/lib/game/matching";
-import type { Level } from "@/lib/game/levels";
+import { levelWords, type Level } from "@/lib/game/levels";
 import { useGameStore } from "@/lib/game/store";
 
 import { Scene } from "./scene/scene";
@@ -28,13 +28,15 @@ function WordMirror({ level }: { level: Level }) {
   const sequence = useGameStore((state) => state.sequence);
   const phase = useGameStore((state) => state.phase);
   const dangerNear = useGameStore((state) => state.dangerNear);
+  const dangerVariant = useGameStore((state) => state.dangerVariant);
 
   // Counts cover the whole Level queue, not just spawned Enemies, so the
   // mission stays readable (and server-renderable) between spawns. The
   // Words come from the Level data prop, so the mirror is correct for the
   // route even before the store has loaded the Level client-side.
+  const words = levelWords(level);
   const defeatedCount = enemies.filter((enemy) => enemy.defeated).length;
-  const remaining = level.words.length - defeatedCount;
+  const remaining = words.length - defeatedCount;
   const byId = new Map(enemies.map((enemy) => [enemy.id, enemy]));
 
   let summary: string;
@@ -45,7 +47,7 @@ function WordMirror({ level }: { level: Level }) {
   } else {
     summary =
       `${remaining} ${remaining === 1 ? "enemy" : "enemies"} remaining. ` +
-      level.words
+      words
         .map((word, index) => {
           const enemy = byId.get(index + 1);
           if (enemy?.defeated) return null;
@@ -56,7 +58,12 @@ function WordMirror({ level }: { level: Level }) {
         .filter(Boolean)
         .join(" ");
     if (phase === "playing" && dangerNear) {
-      summary += " Warning: an enemy is close to the Danger Line.";
+      // The threat's speed variant names the urgency the sighted player sees.
+      const threat =
+        dangerVariant === "runner" ? "a fast enemy"
+        : dangerVariant === "tank" ? "a heavy enemy"
+        : "an enemy";
+      summary += ` Warning: ${threat} is close to the Danger Line.`;
     }
   }
 
@@ -75,7 +82,7 @@ export function Battlefield({ level }: { level: Level }) {
   useAutoPause();
 
   const defeatedCount = enemies.filter((enemy) => enemy.defeated).length;
-  const remaining = level.words.length - defeatedCount;
+  const remaining = level.entries.length - defeatedCount;
 
   return (
     <div className="battlefield">

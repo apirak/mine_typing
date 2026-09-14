@@ -23,7 +23,7 @@ export default async function LevelPage({
             <div className="pause-card">
               <span className="card-kicker">NO SUCH LEVEL</span>
               <h1>Level not found</h1>
-              <p>World 1 has Levels 1 through 5.</p>
+              <p>The curriculum runs from Level 1-1 to Level 5-4.</p>
               <Link className="secondary-button" href="/">
                 Back to the start
               </Link>

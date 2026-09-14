@@ -18,10 +18,15 @@ import { KEY_FINGERS, type Level } from "@/lib/game/levels";
 import { accuracyPercent } from "@/lib/game/storage";
 import { readyFeedback, useGameStore } from "@/lib/game/store";
 
+// The full game keyspace (spec #15): number row, letters, semicolon, and
+// the punctuation Worlds 4–5 type. Button labels are key names; clicks type
+// the lowercase letter, exactly like the physical key unshifted.
 const ROWS = [
+  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
   ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
   ["A", "S", "D", "F", "G", "H", "J", "K", "L", ";"],
   ["Z", "X", "C", "V", "B", "N", "M"],
+  [",", ".", "'", "!", "?"],
 ];
 
 // Home-row bumps belong on F and J alone, like a physical keyboard's
@@ -66,7 +71,7 @@ export function GameplayScreen({ level }: { level: Level }) {
   const remaining = activeEnemies(enemies).length;
   const defeatedCount = enemies.length - remaining;
   const accuracy = accuracyPercent(hits, misses);
-  const progress = (defeatedCount / level.words.length) * 100;
+  const progress = (defeatedCount / level.entries.length) * 100;
 
   const reset = useCallback(() => {
     resetStore();
@@ -149,9 +154,9 @@ export function GameplayScreen({ level }: { level: Level }) {
         {showVirtualKeyboard && <div className="keyboard" aria-label="On-screen keyboard">{ROWS.map((row,rowIndex)=><div className={`key-row row-${rowIndex}`} key={rowIndex}>{row.map((key)=>{
           const trained = level.trainedKeys.includes(key);
           const classes = [trained && "training-key", lastKey === key && "pressed"].filter(Boolean).join(" ");
-          return <button key={key} data-key={key} onClick={()=>typeKey(key)} className={classes || undefined}><span>{key}</span>{HOME_KEYS.has(key) && <i/>}</button>;
+          return <button key={key} data-key={key} onClick={()=>typeKey(key.toLowerCase())} className={classes || undefined}><span>{key}</span>{HOME_KEYS.has(key) && <i/>}</button>;
         })}</div>)}</div>}
-        <p className="hint">{level.trainedKeys.map((key, index) => <Fragment key={key}><kbd>{key}</kbd> {KEY_FINGERS[key]} {index < level.trainedKeys.length - 1 && <span>•</span>} </Fragment>)}<span>•</span> Press <kbd>Esc</kbd> to pause</p>
+        <p className="hint">{level.trainedKeys.length > 0 && <>{level.trainedKeys.map((key, index) => <Fragment key={key}><kbd>{key}</kbd> {KEY_FINGERS[key]} {index < level.trainedKeys.length - 1 && <span>•</span>} </Fragment>)}<span>•</span></>} Press <kbd>Esc</kbd> to pause</p>
       </footer>
       {paused && <div className="overlay" role="dialog" aria-modal="true">
         <PauseCard

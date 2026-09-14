@@ -24,6 +24,9 @@ const {
   isLevelUnlocked,
   nextLevelId,
 } = await vite.ssrLoadModule("/lib/game/progression.ts");
+const { ALL_LEVELS } = await vite.ssrLoadModule("/lib/game/levels.ts");
+
+const ALL_IDS = ALL_LEVELS.map((level) => level.id);
 
 // Star rules (plan_a §11): finishing earns one star, ≥90% accuracy a
 // second, and ≥95% accuracy within the Level's time target the third.
@@ -54,29 +57,42 @@ test("CPM counts correct keys per minute of the run", () => {
 
 test("completed Level ids are the distinct saved result levels", () => {
   const completed = completedLevelIds([
-    { levelId: "1" },
-    { levelId: "1" },
-    { levelId: "3" },
+    { levelId: "1-1" },
+    { levelId: "1-1" },
+    { levelId: "3-1" },
   ]);
-  assert.deepEqual([...completed].sort(), ["1", "3"]);
+  assert.deepEqual([...completed].sort(), ["1-1", "3-1"]);
   assert.deepEqual([...completedLevelIds([])], []);
 });
 
 test("the first Level is always unlocked; later Levels need the previous one completed", () => {
-  assert.equal(isLevelUnlocked("1", new Set()), true);
-  assert.equal(isLevelUnlocked("2", new Set()), false);
-  assert.equal(isLevelUnlocked("2", new Set(["1"])), true);
-  assert.equal(isLevelUnlocked("3", new Set(["1"])), false);
-  assert.equal(isLevelUnlocked("5", new Set(["1", "2", "3", "4"])), true);
+  assert.equal(isLevelUnlocked("1-1", new Set()), true);
+  assert.equal(isLevelUnlocked("1-2", new Set()), false);
+  assert.equal(isLevelUnlocked("1-2", new Set(["1-1"])), true);
+  assert.equal(isLevelUnlocked("1-5", new Set(["1-1", "1-2", "1-3", "1-4"])), true);
+  assert.equal(isLevelUnlocked("2-1", new Set(["1-1", "1-2", "1-3", "1-4"])), false);
+});
+
+test("completing a World's last Level unlocks the next World's first", () => {
+  assert.equal(isLevelUnlocked("2-1", new Set(["1-5"])), true);
+  assert.equal(isLevelUnlocked("3-1", new Set(["2-10"])), true);
+  assert.equal(isLevelUnlocked("4-1", new Set(["3-9"])), true);
+  assert.equal(isLevelUnlocked("5-1", new Set(["4-6"])), true);
 });
 
 test("an unknown Level id is never unlocked and has no next Level", () => {
-  assert.equal(isLevelUnlocked("99", new Set(["1", "2", "3", "4"])), false);
+  assert.equal(isLevelUnlocked("99", new Set(ALL_IDS.slice(0, 33))), false);
   assert.equal(nextLevelId("99"), null);
+  // The retired World-1-only ids are unknown now.
+  assert.equal(isLevelUnlocked("3", new Set(ALL_IDS)), false);
+  assert.equal(nextLevelId("3"), null);
 });
 
-test("the next Level follows the World's order and stops at the last", () => {
-  assert.equal(nextLevelId("1"), "2");
-  assert.equal(nextLevelId("4"), "5");
-  assert.equal(nextLevelId("5"), null);
+test("the next Level follows the curriculum's order and stops at the last", () => {
+  assert.equal(nextLevelId("1-1"), "1-2");
+  assert.equal(nextLevelId("1-5"), "2-1");
+  assert.equal(nextLevelId("2-10"), "3-1");
+  assert.equal(nextLevelId("3-9"), "4-1");
+  assert.equal(nextLevelId("4-6"), "5-1");
+  assert.equal(nextLevelId("5-4"), null);
 });

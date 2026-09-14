@@ -15,11 +15,19 @@
 import { create } from "zustand";
 
 import { applyKey, activeEnemies, type EnemyState } from "./matching";
-import { getLevel, WORLD_ONE, type Level } from "./levels";
+import {
+  ALL_LEVELS,
+  getLevel,
+  pairSpawnChance,
+  type EnemyKind,
+  type EnemyVariant,
+  type Level,
+} from "./levels";
 import {
   createMotion,
   levelComplete,
   nearDanger,
+  nearestVariant,
   stepMotion,
   stunMotion,
   type MotionWorld,
@@ -35,30 +43,48 @@ import {
   type LevelBest,
 } from "./storage";
 
-export type BattlefieldEnemy = EnemyState & { pulse: number };
+export type BattlefieldEnemy = EnemyState & {
+  pulse: number;
+  /** Speed variant from the Level data; drives the walk speed and the tint. */
+  variant: EnemyVariant;
+  /** The World's Enemy kind; drives the scene's small rig touches. */
+  kind: EnemyKind;
+};
 
 export type GamePhase = "playing" | "level-complete" | "game-over";
 
-/** A Level's motion world: its own speed and spawn interval from the data. */
-const motionFor = (level: Level): MotionWorld =>
-  createMotion(level.words, {
+/** Per-run spawn schedules get a fresh seed so runs don't share a rhythm. */
+const freshSeed = () => Math.floor(Math.random() * 0x7fffffff);
+
+/** A Level's motion world: its own speed, spawn interval, pair chance, and a seed. */
+const motionFor = (level: Level, seed: number): MotionWorld =>
+  createMotion(level.entries, {
     walkSpeed: level.walkSpeed,
     spawnInterval: level.spawnInterval,
+    pairChance: pairSpawnChance(level),
+    seed,
   });
 
 const spawnedEnemies = (level: Level, world: MotionWorld): BattlefieldEnemy[] =>
   world.walking.map((enemy) => freshEnemy(level, enemy.id));
 
-const freshEnemy = (level: Level, id: number): BattlefieldEnemy => ({
-  id,
-  word: level.words[id - 1],
-  defeated: false,
-  pulse: 0,
-});
+const freshEnemy = (level: Level, id: number): BattlefieldEnemy => {
+  const entry = level.entries[id - 1];
+  return {
+    id,
+    word: entry.word,
+    variant: entry.variant ?? "walker",
+    kind: level.enemyKind,
+    defeated: false,
+    pulse: 0,
+  };
+};
 
 /** The status line a fresh run of a Level starts with. */
 export const readyFeedback = (level: Level): string =>
-  `Type ${level.trainedKeys.join(" or ")} to attack`;
+  level.trainedKeys.length > 0
+    ? `Type ${level.trainedKeys.join(" or ")} to attack`
+    : "Type the words above to attack";
 
 /** Store fields a fresh run of a Level starts with. */
 const freshRunState = (level: Level) => ({
@@ -71,6 +97,7 @@ const freshRunState = (level: Level) => ({
   bestCombo: 0,
   paused: false,
   dangerNear: false,
+  dangerVariant: null as EnemyVariant | null,
   elapsedSeconds: 0,
   feedback: readyFeedback(level),
   lastKey: "",
@@ -78,12 +105,12 @@ const freshRunState = (level: Level) => ({
   attackTick: 0,
 });
 
-const firstLevel = WORLD_ONE[0];
+const firstLevel = ALL_LEVELS[0];
 
 /** How long the virtual keyboard's pressed key stays down before releasing. */
 const KEY_FLASH_MS = 180;
 
-export const gameMotion: { world: MotionWorld } = { world: motionFor(firstLevel) };
+export const gameMotion: { world: MotionWorld } = { world: motionFor(firstLevel, 0) };
 
 type GameStore = {
   /** The Level currently loaded; its data seeds the run. */
@@ -109,6 +136,8 @@ type GameStore = {
   levelBest: LevelBest | null;
   /** True while an active Enemy is closing on the Danger Line. */
   dangerNear: boolean;
+  /** Variant of the Enemy closest to the line while dangerNear (for the mirror). */
+  dangerVariant: EnemyVariant | null;
   /** Play time of the current run in seconds; frozen while paused. */
   elapsedSeconds: number;
   feedback: string;
@@ -311,20 +340,22 @@ export const useGameStore = create<GameStore>((set, get) => {
       }
       const dangerNear = nearDanger(step.world, aliveIds);
       if (dangerNear !== state.dangerNear) patch.dangerNear = dangerNear;
+      const dangerVariant = nearestVariant(step.world, aliveIds);
+      if (dangerVariant !== state.dangerVariant) patch.dangerVariant = dangerVariant;
       set(patch);
     },
 
     loadLevel: (id) => {
       const level = getLevel(id);
       if (!level) return;
-      gameMotion.world = motionFor(level);
+      gameMotion.world = motionFor(level, freshSeed());
       set({ level, ...freshRunState(level) });
       void refreshBests(level.id);
     },
 
     reset: () => {
       const level = get().level;
-      gameMotion.world = motionFor(level);
+      gameMotion.world = motionFor(level, freshSeed());
       set(freshRunState(level));
     },
 

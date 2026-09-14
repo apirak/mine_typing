@@ -6,6 +6,7 @@ import type { Group, InstancedMesh, MeshLambertMaterial } from "three";
 import { Color, Object3D } from "three";
 
 import { SPAWN_X, enemyX } from "@/lib/game/movement";
+import type { EnemyVariant } from "@/lib/game/levels";
 import { seededRandom } from "@/lib/game/random";
 import { gameMotion, useGameStore } from "@/lib/game/store";
 
@@ -14,6 +15,14 @@ import { useReducedMotion } from "../use-reduced-motion";
 
 const FLASH = new Color("#ff5148");
 const GAIT_SPEED = 9;
+
+// Speed variants read at a glance through static color (spec #15 story 21 —
+// never motion alone): runners burn red, tanks sit heavy and gray.
+const VARIANT_TINT: Record<EnemyVariant, { skin: string; cloth: string }> = {
+  walker: { skin: "#6fa84e", cloth: "#4a7a44" },
+  runner: { skin: "#d98a5f", cloth: "#a83a2e" },
+  tank: { skin: "#9aa39b", cloth: "#5d6660" },
+};
 
 type Debris = {
   velocity: [number, number, number];
@@ -48,6 +57,11 @@ export function VoxelZombie({ id }: { id: number }) {
   const wasDefeated = useRef(enemy?.defeated ?? false);
   const phase = useMemo(() => id * 0.73, [id]);
 
+  // Static body facts from the Level data: variant tint and body scale —
+  // tanks are heavy, Little Zombies small (spec #15's only rig touches).
+  const tint = VARIANT_TINT[enemy?.variant ?? "walker"];
+  const scale = enemy?.kind === "little-zombie" ? 0.75 : enemy?.variant === "tank" ? 1.18 : 1;
+
   const debris = useMemo<Debris[]>(
     () =>
       Array.from({ length: 24 }, () => ({
@@ -68,7 +82,7 @@ export function VoxelZombie({ id }: { id: number }) {
     if (!mesh) return;
     const color = new Color();
     debris.forEach((_, index) => {
-      mesh.setColorAt(index, color.set(random() > 0.4 ? "#6fa84e" : "#4a7a44"));
+      mesh.setColorAt(index, color.set(random() > 0.4 ? tint.skin : tint.cloth));
     });
     // setColorAt above has created the instance color attribute.
     mesh.instanceColor!.needsUpdate = true;
@@ -180,7 +194,7 @@ export function VoxelZombie({ id }: { id: number }) {
   }
 
   return (
-    <group ref={rootRef} position={[SPAWN_X, 0, 0]}>
+    <group ref={rootRef} position={[SPAWN_X, 0, 0]} scale={scale}>
       <group ref={bodyRef}>
         {/* legs, hip-pivoted so they can swing while walking */}
         <group ref={leftLegRef} position={[-0.18, 0.8, 0]}>
@@ -198,30 +212,41 @@ export function VoxelZombie({ id }: { id: number }) {
         {/* torso */}
         <mesh position={[0, 1.28, 0]}>
           <boxGeometry args={[0.85, 0.95, 0.45]} />
-          <meshLambertMaterial ref={clothRef} color="#4a7a44" />
+          <meshLambertMaterial ref={clothRef} color={tint.cloth} />
         </mesh>
         {/* arms reaching toward the Player */}
         <group position={[-0.55, 1.62, 0]} rotation={[0, 0, -(Math.PI / 2 - 0.18)]}>
           <mesh position={[0, -0.34, 0]}>
             <boxGeometry args={[0.24, 0.75, 0.24]} />
-            <meshLambertMaterial color="#6fa84e" />
+            <meshLambertMaterial color={tint.skin} />
           </mesh>
         </group>
         <group position={[0.55, 1.62, 0]} rotation={[0, 0, -(Math.PI / 2 - 0.1)]}>
           <mesh position={[0, -0.34, 0]}>
             <boxGeometry args={[0.24, 0.75, 0.24]} />
-            <meshLambertMaterial color="#6fa84e" />
+            <meshLambertMaterial color={tint.skin} />
           </mesh>
         </group>
         {/* head */}
         <mesh position={[0, 2.12, 0]}>
           <boxGeometry args={[0.62, 0.62, 0.62]} />
-          <meshLambertMaterial ref={skinRef} color="#6fa84e" />
+          <meshLambertMaterial ref={skinRef} color={tint.skin} />
         </mesh>
         <mesh position={[0, 2.48, 0]}>
           <boxGeometry args={[0.66, 0.14, 0.66]} />
-          <meshLambertMaterial color="#3c5c2e" />
+          <meshLambertMaterial color={tint.cloth} />
         </mesh>
+        {/* the Witch World's pointy hat: the one rig touch beyond the tint */}
+        {enemy.kind === "witch" && <group position={[0, 2.55, 0]}>
+          <mesh position={[0, 0.34, 0]}>
+            <coneGeometry args={[0.3, 0.62, 4]} />
+            <meshLambertMaterial color="#3d2b56" />
+          </mesh>
+          <mesh position={[0, 0.05, 0]}>
+            <boxGeometry args={[0.8, 0.1, 0.8]} />
+            <meshLambertMaterial color="#2c1f40" />
+          </mesh>
+        </group>}
         {/* eyes on the camera-facing side */}
         <mesh position={[-0.14, 2.18, 0.32]}>
           <boxGeometry args={[0.1, 0.12, 0.02]} />

@@ -4,7 +4,7 @@
 // inputs arrive as plain values, so the rules stay assertable from
 // node:test.
 
-import { WORLD_ONE } from "./levels";
+import { ALL_LEVELS } from "./levels";
 
 /** A finished run reduced to what the star rules and CPM read. */
 export type RunOutcome = {
@@ -47,22 +47,24 @@ export function completedLevelIds(
 }
 
 /**
- * A Level is playable when it is the World's first or the previous Level
- * has a saved result: completing Level N unlocks N+1, derived from the
- * history instead of a stored flag so progress stays one source of truth.
+ * A Level is playable when it is the curriculum's first or the previous
+ * Level in the flat ordered list has a saved result: completing Level N
+ * unlocks N+1 across World boundaries too (finishing 1-5 opens 2-1),
+ * derived from the history instead of a stored flag so progress stays one
+ * source of truth.
  */
 export function isLevelUnlocked(levelId: string, completed: Set<string>): boolean {
-  const index = WORLD_ONE.findIndex((level) => level.id === levelId);
+  const index = ALL_LEVELS.findIndex((level) => level.id === levelId);
   if (index < 0) return false;
   if (index === 0) return true;
-  return completed.has(WORLD_ONE[index - 1].id);
+  return completed.has(ALL_LEVELS[index - 1].id);
 }
 
-/** The Level that follows in the World's order, or null after the last. */
+/** The Level that follows in the curriculum's order, or null after the last. */
 export function nextLevelId(levelId: string): string | null {
-  const index = WORLD_ONE.findIndex((level) => level.id === levelId);
-  if (index < 0 || index + 1 >= WORLD_ONE.length) return null;
-  return WORLD_ONE[index + 1].id;
+  const index = ALL_LEVELS.findIndex((level) => level.id === levelId);
+  if (index < 0 || index + 1 >= ALL_LEVELS.length) return null;
+  return ALL_LEVELS[index + 1].id;
 }
 
 /** A three-glyph display of a star rating, e.g. "★★☆"; out of range reads empty. */

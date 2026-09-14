@@ -2,9 +2,11 @@
 // trained keys, star rating, and locked/available/completed state, all
 // derived from the `progress` prop — the storage read happens in the
 // client wrapper, so the server render can assert any provided profile.
+// Levels group under their World's header (spec #15 story 19), in
+// curriculum order.
 
 import { isLevelUnlocked } from "@/lib/game/progression";
-import type { Level } from "@/lib/game/levels";
+import type { Level, World } from "@/lib/game/levels";
 import type { LevelBest } from "@/lib/game/storage";
 
 export type LevelProgress = {
@@ -20,7 +22,7 @@ export const completedIdsFromProgress = (
   new Set(Object.keys(progress).filter((id) => progress[id].best !== null));
 
 export type LevelSelectProps = {
-  levels: readonly Level[];
+  worlds: readonly World[];
   /** Saved facts keyed by Level id; a missing entry means never played. */
   progress: Record<string, LevelProgress>;
   /** The Level the keyboard selection rests on (client-side only). */
@@ -37,41 +39,48 @@ const cardState = (
 const starLine = (stars: number | null): string =>
   "★".repeat(stars ?? 0) + "☆".repeat(3 - (stars ?? 0));
 
-export function LevelSelect({ levels, progress, selectedId, onPlay }: LevelSelectProps) {
+/** Card headline: the trained keys, or what else the Level drills. */
+const cardKeys = (level: Level): string =>
+  level.trainedKeys.join(" + ") || level.name.split(" · ")[1] || level.worldLabel;
+
+export function LevelSelect({ worlds, progress, selectedId, onPlay }: LevelSelectProps) {
   const completed = completedIdsFromProgress(progress);
 
   return <main className="game-shell">
     <section className="menu-frame" aria-label="Level Select">
       <header className="menu-head">
-        <small>ZOMBIE WORLD</small>
+        <small>FIVE WORLDS · 34 LEVELS</small>
         <h1>Choose your Level</h1>
       </header>
-      <ol className="level-grid">
-        {levels.map((level) => {
-          const entry = progress[level.id] ?? { best: null, stars: null };
-          const unlocked = isLevelUnlocked(level.id, completed);
-          const state = cardState(unlocked, entry.best);
-          return <li key={level.id}>
-            <button
-              className={`level-card ${state} ${selectedId === level.id ? "is-selected" : ""}`}
-              data-level-id={level.id}
-              aria-disabled={!unlocked}
-              onClick={unlocked ? () => onPlay?.(level.id) : undefined}
-            >
-              <span className="level-stars" aria-label={entry.stars !== null ? `${entry.stars} of 3 stars` : "No stars yet"}>{starLine(entry.stars)}</span>
-              <strong className="level-keys">{level.trainedKeys.join(" + ")}</strong>
-              <span className="level-name">{level.name}</span>
-              <span className="level-state">
-                {state === "completed"
-                  ? `Accuracy ${entry.best?.accuracy}%`
-                  : state === "locked"
-                    ? "Locked"
-                    : "Ready to play"}
-              </span>
-            </button>
-          </li>;
-        })}
-      </ol>
+      {worlds.map((world) => <section className="world-block" key={world.id} aria-label={world.label}>
+        <h2 className="world-title"><small>{world.label}</small></h2>
+        <ol className="level-grid">
+          {world.levels.map((level) => {
+            const entry = progress[level.id] ?? { best: null, stars: null };
+            const unlocked = isLevelUnlocked(level.id, completed);
+            const state = cardState(unlocked, entry.best);
+            return <li key={level.id}>
+              <button
+                className={`level-card ${state} ${selectedId === level.id ? "is-selected" : ""}`}
+                data-level-id={level.id}
+                aria-disabled={!unlocked}
+                onClick={unlocked ? () => onPlay?.(level.id) : undefined}
+              >
+                <span className="level-stars" aria-label={entry.stars !== null ? `${entry.stars} of 3 stars` : "No stars yet"}>{starLine(entry.stars)}</span>
+                <strong className="level-keys">{cardKeys(level)}</strong>
+                <span className="level-name">{level.name}</span>
+                <span className="level-state">
+                  {state === "completed"
+                    ? `Accuracy ${entry.best?.accuracy}%`
+                    : state === "locked"
+                      ? "Locked"
+                      : "Ready to play"}
+                </span>
+              </button>
+            </li>;
+          })}
+        </ol>
+      </section>)}
       <p className="menu-hint">Arrow keys choose · Enter plays · Esc goes back</p>
     </section>
   </main>;

@@ -38,7 +38,7 @@ test("saveLevelResult assigns record fields and loadLevelResults reads the equiv
 
   const record = newLevelResult(
     {
-      levelId: "1",
+      levelId: "1-1",
       accuracy: 96,
       correctKeys: 48,
       incorrectKeys: 2,
@@ -48,7 +48,7 @@ test("saveLevelResult assigns record fields and loadLevelResults reads the equiv
   );
 
   // Every stored record carries the contract fields (spec #2).
-  assert.equal(record.schemaVersion, 1);
+  assert.equal(record.schemaVersion, 2);
   assert.ok(record.id);
   assert.equal(record.createdAt, "2026-09-05T10:00:00.000Z");
   assert.equal(record.updatedAt, "2026-09-05T10:00:00.000Z");
@@ -64,7 +64,7 @@ test("bestOfResults takes the best accuracy and best combo across a Level's runs
   const run = (levelId, accuracy, bestCombo) => ({
     levelId, accuracy, bestCombo,
     id: `run-${levelId}-${accuracy}`, createdAt: "2026-09-05T10:00:00.000Z",
-    updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 1,
+    updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 2,
   });
   const results = [run("1", 90, 12), run("1", 96, 7), run("2", 100, 20)];
 
@@ -85,7 +85,7 @@ test("settings round-trip through newProfile, saveProfile, and loadProfile", asy
     "2026-09-05T10:00:00.000Z",
   );
 
-  assert.equal(profile.schemaVersion, 1);
+  assert.equal(profile.schemaVersion, 2);
   assert.equal(profile.settings.sound, false);
 
   await storage.saveProfile(profile);
@@ -145,7 +145,7 @@ test("a current-version profile with a malformed shape is ignored, not crashed o
     id: "half-baked",
     createdAt: "2026-09-05T10:00:00.000Z",
     updatedAt: "2026-09-05T10:00:00.000Z",
-    schemaVersion: 1,
+    schemaVersion: 2,
   }));
   assert.equal(await storage.loadProfile(), null);
 
@@ -154,7 +154,7 @@ test("a current-version profile with a malformed shape is ignored, not crashed o
     settings: { sound: true, reducedMotion: "yes", showVirtualKeyboard: true },
     createdAt: "2026-09-05T10:00:00.000Z",
     updatedAt: "2026-09-05T10:00:00.000Z",
-    schemaVersion: 1,
+    schemaVersion: 2,
   }));
   assert.equal(await storage.loadProfile(), null);
 });
@@ -166,7 +166,7 @@ test("a current-version Level result with a malformed shape is filtered out", as
     {
       levelId: "1", accuracy: "96", correctKeys: 48, incorrectKeys: 2, bestCombo: 18,
       id: "string-accuracy", createdAt: "2026-09-05T10:00:00.000Z",
-      updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 1,
+      updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 2,
     },
     newLevelResult({ levelId: "1", accuracy: 96, correctKeys: 48, incorrectKeys: 2, bestCombo: 18 }),
   ]));
@@ -187,7 +187,7 @@ test("a result saved before run time existed still loads", async () => {
     {
       levelId: "2", accuracy: 91, correctKeys: 30, incorrectKeys: 3, bestCombo: 9,
       id: "pre-time", createdAt: "2026-09-05T10:00:00.000Z",
-      updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 1,
+      updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 2,
     },
   ]));
 
@@ -204,7 +204,7 @@ test("a result with a non-numeric run time is filtered out", async () => {
       levelId: "2", accuracy: 91, correctKeys: 30, incorrectKeys: 3, bestCombo: 9,
       elapsedSeconds: "fast",
       id: "string-time", createdAt: "2026-09-05T10:00:00.000Z",
-      updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 1,
+      updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 2,
     },
     newLevelResult({ levelId: "2", accuracy: 91, correctKeys: 30, incorrectKeys: 3, bestCombo: 9, elapsedSeconds: 52 }),
   ]));
@@ -220,7 +220,7 @@ test("a profile saved before music and volume existed still loads", async () => 
   backing.setItem("mine_typing:profile", JSON.stringify({
     id: "old-settings", settings: DEFAULT_SETTINGS,
     createdAt: "2026-09-05T10:00:00.000Z", updatedAt: "2026-09-05T10:00:00.000Z",
-    schemaVersion: 1,
+    schemaVersion: 2,
   }));
 
   const profile = await storage.loadProfile();
@@ -233,14 +233,14 @@ test("a profile with damaged music or volume reads as absent", async () => {
   backing.setItem("mine_typing:profile", JSON.stringify({
     id: "loud", settings: { ...DEFAULT_SETTINGS, music: "yes", volume: 80 },
     createdAt: "2026-09-05T10:00:00.000Z", updatedAt: "2026-09-05T10:00:00.000Z",
-    schemaVersion: 1,
+    schemaVersion: 2,
   }));
   assert.equal(await storage.loadProfile(), null);
 
   backing.setItem("mine_typing:profile", JSON.stringify({
     id: "too-loud", settings: { ...DEFAULT_SETTINGS, music: true, volume: 180 },
     createdAt: "2026-09-05T10:00:00.000Z", updatedAt: "2026-09-05T10:00:00.000Z",
-    schemaVersion: 1,
+    schemaVersion: 2,
   }));
   assert.equal(await storage.loadProfile(), null);
 });
@@ -264,4 +264,77 @@ test("clearLevelResults on empty storage stays empty", async () => {
   const storage = createLocalGameStorage(fakeBacking());
   await storage.clearLevelResults();
   assert.deepEqual(await storage.loadLevelResults(), []);
+});
+
+// Spec #15's id renumbering: v1 records (World 1's ids "1"–"5") migrate to
+// the curriculum ids ("1-1"–"1-5") as they are read, so stars and unlocks
+// survive the new five-world Level ids.
+
+const v1Result = (levelId, accuracy = 90) => ({
+  levelId, accuracy, correctKeys: 30, incorrectKeys: 3, bestCombo: 9,
+  id: `v1-${levelId}`, createdAt: "2026-09-05T10:00:00.000Z",
+  updatedAt: "2026-09-05T10:00:00.000Z", schemaVersion: 1,
+});
+
+test("a v1 result under an old World-1 id reads as the new curriculum id", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  backing.setItem("mine_typing:level-results", JSON.stringify([
+    v1Result("1", 95), v1Result("5", 91),
+  ]));
+
+  const results = await storage.loadLevelResults();
+  assert.deepEqual(
+    results.map((result) => [result.levelId, result.schemaVersion]),
+    [["1-1", 2], ["1-5", 2]],
+  );
+});
+
+test("new-geometry ids and unknown strings pass through migration untouched", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  backing.setItem("mine_typing:level-results", JSON.stringify([
+    v1Result("2-3"), v1Result("banana"),
+  ]));
+
+  const results = await storage.loadLevelResults();
+  assert.deepEqual(
+    results.map((result) => result.levelId),
+    ["2-3", "banana"],
+  );
+});
+
+test("a v1 profile loads, restamped to the current schema", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  backing.setItem("mine_typing:profile", JSON.stringify({
+    id: "v1-player", settings: DEFAULT_SETTINGS,
+    createdAt: "2026-09-05T10:00:00.000Z", updatedAt: "2026-09-05T10:00:00.000Z",
+    schemaVersion: 1,
+  }));
+
+  const profile = await storage.loadProfile();
+  assert.equal(profile.id, "v1-player");
+  assert.equal(profile.schemaVersion, 2);
+});
+
+test("a schema newer than this build still reads as absent", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  backing.setItem("mine_typing:level-results", JSON.stringify([{
+    ...v1Result("1-1"), schemaVersion: 3,
+  }]));
+  assert.deepEqual(await storage.loadLevelResults(), []);
+});
+
+test("a v1 record with a damaged shape is filtered out like any other", async () => {
+  const backing = fakeBacking();
+  const storage = createLocalGameStorage(backing);
+  backing.setItem("mine_typing:level-results", JSON.stringify([
+    { ...v1Result("1"), accuracy: "high" },
+    v1Result("2"),
+  ]));
+
+  const results = await storage.loadLevelResults();
+  assert.deepEqual(results.map((result) => result.levelId), ["1-2"]);
 });

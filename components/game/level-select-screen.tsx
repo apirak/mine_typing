@@ -6,18 +6,20 @@
 // the unlocked Levels, Enter plays, Esc goes home.
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { LevelSelect, completedIdsFromProgress, type LevelProgress } from "./level-select";
 import { completedLevelIds, isLevelUnlocked, starsFor } from "@/lib/game/progression";
-import type { Level } from "@/lib/game/levels";
+import type { World } from "@/lib/game/levels";
 import { bestOfResults } from "@/lib/game/storage";
 import { gameStorage } from "@/lib/game/storage-client";
 
-export function LevelSelectScreen({ levels }: { levels: readonly Level[] }) {
+export function LevelSelectScreen({ worlds }: { worlds: readonly World[] }) {
   const router = useRouter();
   const [progress, setProgress] = useState<Record<string, LevelProgress>>({});
   const [selectedOverride, setSelectedOverride] = useState<string | null>(null);
+
+  const levels = useMemo(() => worlds.flatMap((world) => world.levels), [worlds]);
 
   useEffect(() => {
     void (async () => {
@@ -50,7 +52,7 @@ export function LevelSelectScreen({ levels }: { levels: readonly Level[] }) {
         }
         setProgress(map);
       } catch {
-        // Storage read failed: a fresh profile view, Level 1 only.
+        // Storage read failed: a fresh profile view, Level 1-1 only.
       }
     })();
   }, [levels]);
@@ -90,7 +92,7 @@ export function LevelSelectScreen({ levels }: { levels: readonly Level[] }) {
 
   return (
     <LevelSelect
-      levels={levels}
+      worlds={worlds}
       progress={progress}
       selectedId={selectedId}
       onPlay={play}

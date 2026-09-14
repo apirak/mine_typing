@@ -2,6 +2,8 @@
 // progress plus one typed key, returns the next state. No React, no DOM,
 // no three.js — assertable from node:test without a browser or GPU.
 
+import { GAME_KEY_PATTERN } from "./keys";
+
 export type EnemySeed = { id: number; word: string };
 
 export type EnemyState = EnemySeed & { defeated: boolean };
@@ -39,23 +41,22 @@ export function matchedLetters(word: string, sequence: string): number {
 }
 
 /**
- * Apply one key. Returns null for keys outside the trained keyspace
- * (A–Z plus the home-row semicolon) so callers can ignore them. A miss
- * resets the group (Words return to white); completing a Word defeats
- * every enemy carrying it — identical Words die together — and clears the
- * group so the next key opens a fresh search.
+ * Apply one key. Returns null for keys outside the game keyspace (letters,
+ * digits, `. , ! ? '` and the home-row semicolon) so callers can ignore them.
+ * Matching is case-sensitive — a Shift capital only completes a Word that
+ * spells one (spec #15). A miss resets the group (Words return to white);
+ * completing a Word defeats every enemy carrying it — identical Words die
+ * together — and clears the group so the next key opens a fresh search.
  */
 export function applyKey<T extends EnemyState>(
   currentEnemies: readonly T[],
   currentProgress: GameProgress,
   rawKey: string,
 ): { enemies: T[]; progress: GameProgress; event: KeyEvent } | null {
-  // ";" types lowercase and uppercases to itself, so it passes through.
-  const key = rawKey === ";" ? ";" : rawKey.toUpperCase();
-  if (!/^[A-Z;]$/.test(key)) return null;
+  if (!GAME_KEY_PATTERN.test(rawKey)) return null;
 
   const active = currentEnemies.filter((enemy) => !enemy.defeated);
-  const nextSequence = currentProgress.sequence + key;
+  const nextSequence = currentProgress.sequence + rawKey;
   const matches = active.filter((enemy) => enemy.word.startsWith(nextSequence));
 
   if (matches.length === 0) {
